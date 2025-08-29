@@ -19,15 +19,19 @@ This document tracks the migration from the deprecated `@electron/remote` module
 - [x] Proper error handling added throughout
 - [x] Context isolation fully implemented
 
-### src/classes/netstat.class.js
-- [ ] Line 50: Remote usage in netstat class
+### src/classes/netstat.class.js - ✅ COMPLETED
+- [x] Replaced @electron/remote.app.getPath() with electronAPI.getUserDataPath()
+- [x] Updated IPC logging calls to use electronAPI.send()
+- [x] Added async initialization pattern for GeoIP database
 
-### src/classes/updateChecker.class.js
-- [ ] Line 5: `const {ipcRenderer, remote} = require("electron");`
-- [ ] Line 6: Usage of remote in update checker
+### src/classes/updateChecker.class.js - ✅ COMPLETED
+- [x] Replaced electron.remote with electronAPI.getAppVersion()
+- [x] Updated all IPC calls to use electronAPI.send()
+- [x] Replaced electron.shell.openExternal with electronAPI.shellOpenExternal()
+- [x] Added async initialization pattern
 
-### src/classes/terminal.class.js
-- [ ] Line 296: Remote usage in terminal class
+### src/classes/terminal.class.js - ✅ NO MIGRATION NEEDED
+- [x] No @electron/remote usage found in this file
 
 ## Migration Strategy:
 1. Create preload script to expose secure API

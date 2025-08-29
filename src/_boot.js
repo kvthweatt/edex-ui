@@ -617,24 +617,68 @@ app.on('ready', async () => {
         app.quit();
     });
 
-    // Global shortcuts management
-    ipcMain.handle('global-shortcut-register', (event, accelerator, callback) => {
-        const { globalShortcut } = electron;
-        return globalShortcut.register(accelerator, callback);
-    });
-
     ipcMain.handle('global-shortcut-unregister', (event, accelerator) => {
         const { globalShortcut } = electron;
         globalShortcut.unregister(accelerator);
+        shortcuts.delete(accelerator);
         return { success: true };
     });
 
     ipcMain.handle('global-shortcut-unregister-all', () => {
         const { globalShortcut } = electron;
         globalShortcut.unregisterAll();
+        shortcuts.clear();
         return { success: true };
     });
 
+    // Settings and window state management
+    ipcMain.handle('write-settings', async (event, settings) => {
+        try {
+            fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 4));
+            return { success: true };
+        } catch (error) {
+            throw new Error(`Failed to write settings: ${error.message}`);
+        }
+    });
+
+    ipcMain.handle('write-window-state', async (event, state) => {
+        try {
+            fs.writeFileSync(lastWindowStateFile, JSON.stringify(state, null, 4));
+            return { success: true };
+        } catch (error) {
+            throw new Error(`Failed to write window state: ${error.message}`);
+        }
+    });
+
+    // Window events
+    win.on('resize', () => {
+        win.webContents.send('window-resize');
+    });
+
+    win.on('leave-full-screen', () => {
+        win.webContents.send('window-leave-fullscreen');
+    });
+
+    // Global shortcuts management (corrected)
+    const shortcuts = new Map();
+    
+    ipcMain.handle('global-shortcut-register', (event, accelerator, callbackId) => {
+        const { globalShortcut } = electron;
+        try {
+            const success = globalShortcut.register(accelerator, () => {
+                // Send message back to renderer with callback ID
+                win.webContents.send('global-shortcut-' + callbackId);
+            });
+            if (success) {
+                shortcuts.set(accelerator, callbackId);
+            }
+            return success;
+        } catch (error) {
+            console.error('Failed to register global shortcut:', error);
+            return false;
+        }
+    });
+    
     // Web frame operations  
     ipcMain.handle('set-visual-zoom-limits', (event, min, max) => {
         // This needs to be executed in the renderer process, not main
