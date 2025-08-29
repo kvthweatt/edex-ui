@@ -4,6 +4,39 @@ if (cluster.isPrimary) {
     const electron = require("electron");
     const ipc = electron.ipcMain;
     const signale = require("signale");
+    
+    // Configure signale for Windows compatibility
+    if (process.platform === "win32") {
+        signale.config({
+            displayLabel: false,
+            displayBadge: false,
+            displayDate: false,
+            displayFilename: false
+        });
+        
+        const { Signale } = require('signale');
+        const options = {
+            types: {
+                success: {
+                    badge: '[+]',
+                    color: 'green', 
+                    label: 'success'
+                },
+                warn: {
+                    badge: '[!]',
+                    color: 'yellow',
+                    label: 'warn'
+                },
+                info: {
+                    badge: '[i]',
+                    color: 'blue',
+                    label: 'info'
+                }
+            }
+        };
+        
+        Object.assign(signale, new Signale(options));
+    }
     // Also, leave a core available for the renderer process
     const osCPUs = require("os").cpus().length - 1;
     // See #904
@@ -73,6 +106,30 @@ if (cluster.isPrimary) {
     });
 } else if (cluster.isWorker) {
     const signale = require("signale");
+    
+    // Configure signale for Windows compatibility in worker
+    if (process.platform === "win32") {
+        signale.config({
+            displayLabel: false,
+            displayBadge: false,
+            displayDate: false,
+            displayFilename: false
+        });
+        
+        const { Signale } = require('signale');
+        const options = {
+            types: {
+                info: {
+                    badge: '[i]',
+                    color: 'blue',
+                    label: 'info'
+                }
+            }
+        };
+        
+        Object.assign(signale, new Signale(options));
+    }
+    
     const si = require("systeminformation");
 
     signale.info("Multithread worker started at "+process.pid);

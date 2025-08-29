@@ -1,3 +1,29 @@
+// Immediate test to verify renderer is loading
+console.log("[RENDERER] Script started loading");
+
+// Wait for DOM to be ready before accessing elements
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log("[RENDERER] DOM loaded, initializing...");
+        const bootScreen = document.getElementById("boot_screen");
+        if (bootScreen) {
+            bootScreen.innerHTML = "Renderer loading...<br/>";
+            console.log("[RENDERER] Boot screen updated");
+        } else {
+            console.error("[RENDERER] Boot screen element not found!");
+        }
+    });
+} else {
+    console.log("[RENDERER] DOM already loaded");
+    const bootScreen = document.getElementById("boot_screen");
+    if (bootScreen) {
+        bootScreen.innerHTML = "Renderer loading...<br/>";
+        console.log("[RENDERER] Boot screen updated");
+    } else {
+        console.error("[RENDERER] Boot screen element not found!");
+    }
+}
+
 // Disable eval()
 window.eval = global.eval = function () {
     throw new Error("eval() is disabled for security reasons.");
@@ -238,8 +264,14 @@ window.audioManager = new AudioManager();
 
 // Initialize paths, load config, and start app
 async function startApp() {
+    // Add debugging info
+    console.log('Starting eDEX-UI renderer...');
+    document.getElementById("boot_screen").innerHTML = "Starting eDEX-UI renderer...<br/>";
+    
     try {
+        document.getElementById("boot_screen").innerHTML += "Loading configuration...<br/>";
         await initializeConfig();
+        document.getElementById("boot_screen").innerHTML += "Loading CLI parameters...<br/>";
         await loadCLIParameters();
     } catch (error) {
         console.error('Failed to initialize:', error);

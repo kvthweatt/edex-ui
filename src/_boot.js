@@ -1,4 +1,69 @@
 const signale = require("signale");
+
+// Configure signale for Windows compatibility
+if (process.platform === "win32") {
+    signale.config({
+        displayLabel: false,
+        displayBadge: false,
+        displayDate: false,
+        displayFilename: false
+    });
+    
+    // Use ASCII-safe symbols for Windows
+    const { Signale } = require('signale');
+    const options = {
+        types: {
+            start: {
+                badge: '[*]',
+                color: 'cyan',
+                label: 'start'
+            },
+            success: {
+                badge: '[+]',
+                color: 'green', 
+                label: 'success'
+            },
+            pending: {
+                badge: '[ ]',
+                color: 'yellow',
+                label: 'pending'
+            },
+            complete: {
+                badge: '[+]',
+                color: 'green',
+                label: 'complete'
+            },
+            fatal: {
+                badge: '[!]',
+                color: 'red',
+                label: 'fatal'
+            },
+            error: {
+                badge: '[!]',
+                color: 'red', 
+                label: 'error'
+            },
+            watch: {
+                badge: '[~]',
+                color: 'yellow',
+                label: 'watch'
+            },
+            info: {
+                badge: '[i]',
+                color: 'blue',
+                label: 'info'
+            },
+            warn: {
+                badge: '[!]',
+                color: 'yellow',
+                label: 'warn'
+            }
+        }
+    };
+    
+    // Replace the default signale with ASCII-safe version
+    Object.assign(signale, new Signale(options));
+}
 const {app, BrowserWindow, dialog, shell} = require("electron");
 
 process.on("uncaughtException", e => {
@@ -218,6 +283,9 @@ function createWindow(settings) {
         protocol: 'file:',
         slashes: true
     }));
+    
+    // Open DevTools by default for debugging
+    win.webContents.openDevTools();
 
     signale.complete("Frontend window created!");
     win.show();

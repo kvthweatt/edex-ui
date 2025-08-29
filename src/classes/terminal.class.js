@@ -307,7 +307,11 @@ class Terminal {
 
         } else if (opts.role === "server") {
 
-            this.Pty = require("node-pty");
+            // Load secure PTY backend via abstraction layer
+            this.Pty = require("./ptyLoader");
+            if (!this.Pty) {
+                throw new Error('PTY backend unavailable - terminal functionality disabled');
+            }
             this.Websocket = require("ws").Server;
             this.Ipc = require("electron").ipcMain;
 
