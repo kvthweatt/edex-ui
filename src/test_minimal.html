@@ -37,6 +37,15 @@
 
             log("JavaScript engine working");
             log("Starting class tests...");
+            
+            // Create module.exports shim
+            if (typeof module === 'undefined') {
+                window.module = {};
+            }
+            if (typeof module.exports === 'undefined') {
+                module.exports = {};
+            }
+            log("Module.exports shim created");
         </script>
 
         <!-- Test each class file one by one -->

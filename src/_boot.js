@@ -149,7 +149,7 @@ function setupDirectoriesAndDefaults() {
             shellArgs: '',
             cwd: electron.app.getPath("userData"),
             keyboard: "en-US",
-            theme: "tron",
+            theme: "tron-notype",
             termFontSize: 15,
             audio: true,
             audioVolume: 1.0,
@@ -279,13 +279,13 @@ function createWindow(settings) {
     });
 
     win.loadURL(url.format({
-        pathname: path.join(__dirname, 'test_minimal.html'),
+        pathname: path.join(__dirname, 'ui.html'),
         protocol: 'file:',
         slashes: true
     }));
     
-    // Temporarily disable DevTools auto-open
-    // win.webContents.openDevTools();
+    // Temporarily enable DevTools for debugging
+    win.webContents.openDevTools();
 
     signale.complete("Frontend window created!");
     win.show();

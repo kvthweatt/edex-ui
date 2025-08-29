@@ -2,8 +2,7 @@ class Keyboard {
     constructor(opts) {
         if (!opts.layout || !opts.container) throw "Missing options";
 
-        const layout = JSON.parse(require("fs").readFileSync(opts.layout, {encoding: "utf-8"}));
-        this.ctrlseq = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""];
+        this.ctrlseq = ["", "\u001b", "\u001c", "\u001d", "\u001e", "\u001f", "\u0011", "\u0017", "\u0012", "\u0012", "\u0019", "\u0015", "\u0010", "\u0001", "\u0013", "\u0004", "\u0006", "\u001a", "\u0018", "\u0003", "\u0016", "\u0002"];
         this.container = document.getElementById(opts.container);
 
         this.linkedToTerm = true;
@@ -57,6 +56,29 @@ class Keyboard {
             }
         });
 
+        // Load keyboard layout asynchronously and initialize
+        this._initKeyboard(opts.layout);
+    }
+
+    async _initKeyboard(layoutPath) {
+        try {
+            // Extract just the filename from the path
+            const layoutName = layoutPath.split('/').pop().replace('.json', '');
+            const layout = await window.electronAPI.loadKeyboardLayout(layoutName);
+            this._buildKeyboardDOM(layout);
+        } catch (error) {
+            console.error('Failed to load keyboard layout:', error);
+            // Create a minimal fallback layout
+            const fallbackLayout = {
+                row_space: [
+                    { name: " ", cmd: " " }
+                ]
+            };
+            this._buildKeyboardDOM(fallbackLayout);
+        }
+    }
+
+    _buildKeyboardDOM(layout) {
         // Parse keymap and create DOM
         Object.keys(layout).forEach(row => {
             this.container.innerHTML += `<div class="keyboard_row" id="`+row+`"></div>`;

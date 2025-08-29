@@ -97,16 +97,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Screen information
   getAllDisplays: () => ipcRenderer.invoke('get-all-displays'),
   
-  // Window controls
-  isWindowFullScreen: () => ipcRenderer.invoke('window-is-fullscreen'),
-  setWindowFullScreen: (fullscreen) => ipcRenderer.invoke('window-set-fullscreen', fullscreen),
-  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
-  isWindowMaximized: () => ipcRenderer.invoke('window-is-maximized'),
-  maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
-  unmaximizeWindow: () => ipcRenderer.invoke('window-unmaximize'),
-  getWindowSize: () => ipcRenderer.invoke('window-get-size'),
-  setWindowSize: (width, height) => ipcRenderer.invoke('window-set-size', width, height),
-  toggleDevTools: () => ipcRenderer.invoke('toggle-dev-tools'),
+    // Window controls
+    isWindowFullScreen: () => ipcRenderer.invoke('window-is-fullscreen'),
+    setWindowFullScreen: (fullscreen) => ipcRenderer.invoke('window-set-fullscreen', fullscreen),
+    minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+    isWindowMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+    maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
+    unmaximizeWindow: () => ipcRenderer.invoke('window-unmaximize'),
+    getWindowSize: () => ipcRenderer.invoke('window-get-size'),
+    setWindowSize: (width, height) => ipcRenderer.invoke('window-set-size', width, height),
+    toggleDevTools: () => ipcRenderer.invoke('toggle-dev-tools'),
+    setVisualZoomLevelLimits: (min, max) => ipcRenderer.invoke('set-visual-zoom-limits', min, max),
   
   // Window event handlers
   onWindowResize: (callback) => {

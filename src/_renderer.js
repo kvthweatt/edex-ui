@@ -42,9 +42,13 @@ if (document.readyState === 'loading') {
 }
 
 // Disable eval()
-window.eval = global.eval = function () {
+window.eval = function () {
     throw new Error("eval() is disabled for security reasons.");
 };
+// Also disable global.eval if it exists
+if (typeof global !== 'undefined') {
+    global.eval = window.eval;
+}
 // Security helper :)
 window._escapeHtml = text => {
     let map = {
@@ -138,11 +142,12 @@ window.electronAPI.receive("getThemeOverride", async (theme) => {
             const themeData = await window.electronAPI.loadTheme(window.settings.theme);
             _loadTheme(themeData);
         } else {
-            const themeData = await window.electronAPI.loadTheme(window.settings.theme);
-            _loadTheme(themeData);
+            await loadThemeWithFallback();
         }
     } catch (error) {
         console.error('Failed to load theme:', error);
+        const bootScreen = document.getElementById("boot_screen");
+        if (bootScreen) bootScreen.innerHTML += `<br/>[RENDERER ERROR] Theme loading failed: ${error.message}<br/>`;
     }
 });
 window.electronAPI.send("getThemeOverride");
@@ -155,6 +160,51 @@ window.electronAPI.receive("getKbOverride", (layout) => {
     }
 });
 window.electronAPI.send("getKbOverride");
+
+// Theme loading with fallback handling
+async function loadThemeWithFallback() {
+    let themeName = window.settings.theme;
+    const fallbackThemes = ['tron-notype', 'matrix', 'apollo', 'cyborg'];
+    
+    // If theme name is missing or undefined, use fallback
+    if (!themeName) {
+        console.warn('No theme specified in settings, using fallback');
+        themeName = fallbackThemes[0];
+        window.settings.theme = themeName;
+    }
+    
+    // Try to load the specified theme
+    for (let i = 0; i < fallbackThemes.length + 1; i++) {
+        try {
+            let currentTheme = (i === 0) ? themeName : fallbackThemes[i - 1];
+            console.log(`Attempting to load theme: ${currentTheme}`);
+            const themeData = await window.electronAPI.loadTheme(currentTheme);
+            _loadTheme(themeData);
+            if (i > 0) {
+                console.warn(`Fallback theme '${currentTheme}' loaded successfully after '${themeName}' failed`);
+                const bootScreen = document.getElementById("boot_screen");
+                if (bootScreen) bootScreen.innerHTML += `<br/>[RENDERER WARNING] Using fallback theme '${currentTheme}' instead of '${themeName}'<br/>`;
+            }
+            return;
+        } catch (error) {
+            console.error(`Failed to load theme '${(i === 0) ? themeName : fallbackThemes[i - 1]}':`, error);
+            if (i === fallbackThemes.length) {
+                // All fallback themes failed, create a minimal theme
+                console.error('All theme fallbacks failed, creating minimal theme');
+                const minimalTheme = {
+                    colors: { r: 170, g: 207, b: 209, black: "#000000", light_black: "#05080d", grey: "#262828" },
+                    cssvars: { font_main: "monospace", font_main_light: "monospace" },
+                    terminal: { fontFamily: "monospace", foreground: "#aacfd1", background: "#05080d" },
+                    injectCSS: ""
+                };
+                _loadTheme(minimalTheme);
+                const bootScreen = document.getElementById("boot_screen");
+                if (bootScreen) bootScreen.innerHTML += `<br/>[RENDERER ERROR] All themes failed, using minimal fallback<br/>`;
+                return;
+            }
+        }
+    }
+}
 
 // Load UI theme
 window._loadTheme = theme => {
@@ -276,22 +326,8 @@ function initSystemInformationProxy() {
     });
 }
 
-// Init audio with error handling
-try {
-    console.log('[RENDERER] Initializing AudioManager...');
-    window.audioManager = new AudioManager();
-    console.log('[RENDERER] AudioManager initialized successfully');
-} catch (error) {
-    console.error('[RENDERER] Failed to initialize AudioManager:', error);
-    const bootScreen = document.getElementById("boot_screen");
-    if (bootScreen) {
-        bootScreen.innerHTML += `<br/>AUDIO ERROR: ${error.message}`;
-    }
-    // Create a no-op audio manager
-    window.audioManager = new Proxy({}, {
-        get: () => ({ play: () => true })
-    });
-}
+// Audio manager will be initialized in startApp function
+window.audioManager = null;
 
 // Initialize paths, load config, and start app
 async function startApp() {
@@ -317,6 +353,30 @@ async function startApp() {
         // Show error on boot screen
         if (bootScreen) bootScreen.innerHTML += `<br/>[RENDERER ERROR] ${error.message}<br/>[RENDERER ERROR] Stack: ${error.stack}`;
         return;
+    }
+    
+    // Initialize AudioManager after configuration is loaded
+    try {
+        if (bootScreen) bootScreen.innerHTML += "[RENDERER DEBUG] Initializing AudioManager...<br/>";
+        window.audioManager = new AudioManager();
+        if (bootScreen) bootScreen.innerHTML += "[RENDERER DEBUG] AudioManager initialized successfully!<br/>";
+    } catch (error) {
+        console.error('[RENDERER] Failed to initialize AudioManager:', error);
+        if (bootScreen) bootScreen.innerHTML += `<br/>[RENDERER ERROR] AudioManager failed: ${error.message}<br/>`;
+        // Create a no-op audio manager to prevent crashes
+        window.audioManager = new Proxy({}, {
+            get: () => ({ play: () => true })
+        });
+    }
+    
+    // Register keyboard shortcuts after configuration is loaded
+    try {
+        if (bootScreen) bootScreen.innerHTML += "[RENDERER DEBUG] Registering keyboard shortcuts...<br/>";
+        await window.registerKeyboardShortcuts();
+        if (bootScreen) bootScreen.innerHTML += "[RENDERER DEBUG] Keyboard shortcuts registered!<br/>";
+    } catch (error) {
+        console.error('[RENDERER] Failed to register shortcuts:', error);
+        if (bootScreen) bootScreen.innerHTML += `<br/>[RENDERER ERROR] Shortcuts failed: ${error.message}<br/>`;
     }
     
     let i = 0;
@@ -1040,7 +1100,7 @@ window.toggleFullScreen = async () => {
 };
 
 // Display available keyboard shortcuts and custom shortcuts helper
-window.openShortcutsHelp = () => {
+window.openShortcutsHelp = async () => {
     if (document.getElementById("settingsEditor")) return;
 
     const shortcutsDefinition = {
@@ -1217,6 +1277,11 @@ window.useAppShortcut = action => {
 window.electronAPI.globalShortcutUnregisterAll();
 
 window.registerKeyboardShortcuts = async () => {
+    // Ensure shortcuts are loaded before trying to iterate
+    if (!window.shortcuts || !Array.isArray(window.shortcuts)) {
+        console.warn('Shortcuts not loaded yet, skipping keyboard shortcut registration');
+        return;
+    }
     window.shortcuts.forEach(async cut => {
         if (!cut.enabled) return;
 
@@ -1242,7 +1307,6 @@ window.registerKeyboardShortcuts = async () => {
         }
     });
 };
-window.registerKeyboardShortcuts();
 
 // See #361
 window.addEventListener("focus", () => {
