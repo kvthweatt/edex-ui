@@ -393,15 +393,15 @@ async function displayTitleScreen() {
 
 // Returns the user's desired display name
 async function getDisplayName() {
-    let user = settings.username || null;
+    let user = window.settings.username || null;
     if (user)
         return user;
 
     try {
-        user = await require("username")();
+        user = await window.electronAPI.getUsername();
     } catch (e) {}
 
-    return user;
+    return user || null;
 }
 
 // Create the UI's html structure and initialize the terminal client and the keyboard
@@ -436,7 +436,7 @@ async function initUI() {
     <section id="keyboard" style="opacity:0;">
     </section>`;
     window.keyboard = new Keyboard({
-        layout: path.join(keyboardsDir, settings.keyboard+".json"),
+        layout: joinPath(keyboardsDir, window.settings.keyboard+".json"),
         container: "keyboard"
     });
 
@@ -551,7 +551,17 @@ async function initUI() {
     window.onmouseup = e => {
         if (window.keyboard.linkedToTerm) window.term[window.currentTerm].term.focus();
     };
-    window.term[0].term.writeln("\033[1m"+`Welcome to eDEX-UI v${electron.remote.app.getVersion()} - Electron v${process.versions.electron}`+"\033[0m");
+    // Terminal welcome message with async version info
+    (async () => {
+        try {
+            const appVersion = await window.electronAPI.getAppVersion();
+            const processVersions = await window.electronAPI.getProcessVersions();
+            window.term[0].term.writeln("\033[1m"+`Welcome to eDEX-UI v${appVersion} - Electron v${processVersions.electron}`+"\033[0m");
+        } catch (error) {
+            console.error('Failed to load version info:', error);
+            window.term[0].term.writeln("\033[1m"+`Welcome to eDEX-UI`+"\033[0m");
+        }
+    })();
 
     await _delay(100);
 
