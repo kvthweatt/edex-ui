@@ -394,6 +394,9 @@ async function startApp() {
 // Start the application
 startApp();
 
+// Boot sequence counter
+let bootLineIndex = 0;
+
 // Startup boot log
 async function displayLine() {
     let bootScreen = document.getElementById("boot_screen");
@@ -423,47 +426,47 @@ async function displayLine() {
         }
     }
 
-    if (typeof log[i] === "undefined") {
+    if (typeof log[bootLineIndex] === "undefined") {
         setTimeout(displayTitleScreen, 300);
         return;
     }
 
-    if (log[i] === "Boot Complete") {
+    if (log[bootLineIndex] === "Boot Complete") {
         window.audioManager.granted.play();
     } else {
         window.audioManager.stdout.play();
     }
-    bootScreen.innerHTML += log[i]+"<br/>";
-    i++;
+    bootScreen.innerHTML += log[bootLineIndex]+"<br/>";
+    bootLineIndex++;
 
     switch(true) {
-        case i === 2:
+        case bootLineIndex === 2:
             bootScreen.innerHTML += `eDEX-UI Kernel version ${appVersion} boot at ${Date().toString()}; root:xnu-1699.22.73~1/RELEASE_X86_64`;
-        case i === 4:
+        case bootLineIndex === 4:
             setTimeout(displayLine, 500);
             break;
-        case i > 4 && i < 25:
+        case bootLineIndex > 4 && bootLineIndex < 25:
             setTimeout(displayLine, 30);
             break;
-        case i === 25:
+        case bootLineIndex === 25:
             setTimeout(displayLine, 400);
             break;
-        case i === 42:
+        case bootLineIndex === 42:
             setTimeout(displayLine, 300);
             break;
-        case i > 42 && i < 82:
+        case bootLineIndex > 42 && bootLineIndex < 82:
             setTimeout(displayLine, 25);
             break;
-        case i === 83:
+        case bootLineIndex === 83:
             if (await isArchUser())
                 bootScreen.innerHTML += "btw i use arch<br/>";
             setTimeout(displayLine, 25);
             break;
-        case i >= log.length-2 && i < log.length:
+        case bootLineIndex >= log.length-2 && bootLineIndex < log.length:
             setTimeout(displayLine, 300);
             break;
         default:
-            setTimeout(displayLine, Math.pow(1 - (i/1000), 3)*25);
+            setTimeout(displayLine, Math.pow(1 - (bootLineIndex/1000), 3)*25);
     }
 }
 
@@ -680,17 +683,17 @@ async function initUI() {
     };
     // Prevent losing hardware keyboard focus on the terminal when using touch keyboard
     window.onmouseup = e => {
-        if (window.keyboard.linkedToTerm) window.term[window.currentTerm].term.focus();
+        if (window.keyboard.linkedToTerm) window.terminalBridge.focus(window.term[window.currentTerm].id);
     };
     // Terminal welcome message with async version info
     (async () => {
         try {
             const appVersion = await window.electronAPI.getAppVersion();
             const processVersions = await window.electronAPI.getProcessVersions();
-            window.term[0].term.writeln("\033[1m"+`Welcome to eDEX-UI v${appVersion} - Electron v${processVersions.electron}`+"\033[0m");
+            window.terminalBridge.writeln(window.term[0].id, "\033[1m"+`Welcome to eDEX-UI v${appVersion} - Electron v${processVersions.electron}`+"\033[0m");
         } catch (error) {
             console.error('Failed to load version info:', error);
-            window.term[0].term.writeln("\033[1m"+`Welcome to eDEX-UI`+"\033[0m");
+            window.terminalBridge.writeln(window.term[0].id, "\033[1m"+`Welcome to eDEX-UI`+"\033[0m");
         }
     })();
 
@@ -747,7 +750,7 @@ window.focusShellTab = number => {
         document.getElementById("terminal"+number).setAttribute("class", "active");
 
         window.term[number].fit();
-        window.term[number].term.focus();
+        window.terminalBridge.focus(window.term[number].id);
         window.term[number].resendCWD();
 
         window.fsDisp.followTab();
@@ -772,7 +775,7 @@ window.focusShellTab = number => {
                     delete window.term[number].onprocesschange;
                     document.getElementById("shell_tab"+number).innerHTML = "<p>EMPTY</p>";
                     document.getElementById("terminal"+number).innerHTML = "";
-                    window.term[number].term.dispose();
+                    window.terminalBridge.dispose(window.term[number].id);
                     delete window.term[number];
                     window.useAppShortcut("PREVIOUS_TAB");
                 };
@@ -1026,7 +1029,7 @@ window.openSettings = async () => {
         window.keyboard.attach();
 
         // Focus back on the term
-        window.term[window.currentTerm].term.focus();
+        window.terminalBridge.focus(window.term[window.currentTerm].id);
     });
 };
 
@@ -1178,7 +1181,7 @@ window.openShortcutsHelp = async () => {
         ]
     }, () => {
         window.keyboard.attach();
-        window.term[window.currentTerm].term.focus();
+        window.terminalBridge.focus(window.term[window.currentTerm].id);
     });
 
     let wrap1 = document.getElementById('shortcutsHelpAccordeon1');

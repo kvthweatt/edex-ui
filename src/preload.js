@@ -10,12 +10,14 @@ try {
   contextBridge.exposeInMainWorld('terminalBridge', {
     create: (id, parentSelector, options) => terminalBridge.create(id, parentSelector, options),
     write: (id, data) => terminalBridge.write(id, data),
+    writeln: (id, data) => terminalBridge.writeln(id, data),
     resize: (id, cols, rows) => terminalBridge.resize(id, cols, rows),
     fit: (id) => terminalBridge.fit(id),
     focus: (id) => terminalBridge.focus(id),
     getDimensions: (id) => terminalBridge.getDimensions(id),
     scrollLines: (id, amount) => terminalBridge.scrollLines(id, amount),
     attachWebSocket: (id, websocket) => terminalBridge.attachWebSocket(id, websocket),
+    send: (id, data) => terminalBridge.send(id, data),
     on: (id, event, callback) => terminalBridge.on(id, event, callback),
     off: (id, event, callback) => terminalBridge.off(id, event, callback),
     hasSelection: (id) => terminalBridge.hasSelection(id),
@@ -30,14 +32,18 @@ try {
   contextBridge.exposeInMainWorld('terminalBridge', {
     create: () => { throw new Error('TerminalBridge not available'); },
     write: () => { throw new Error('TerminalBridge not available'); },
+    writeln: () => { throw new Error('TerminalBridge not available'); },
     resize: () => { throw new Error('TerminalBridge not available'); },
     fit: () => { throw new Error('TerminalBridge not available'); },
     focus: () => { throw new Error('TerminalBridge not available'); },
     getDimensions: () => { throw new Error('TerminalBridge not available'); },
     scrollLines: () => { throw new Error('TerminalBridge not available'); },
     attachWebSocket: () => { throw new Error('TerminalBridge not available'); },
+    send: () => { throw new Error('TerminalBridge not available'); },
     on: () => { throw new Error('TerminalBridge not available'); },
     off: () => { throw new Error('TerminalBridge not available'); },
+    hasSelection: () => { throw new Error('TerminalBridge not available'); },
+    clearSelection: () => { throw new Error('TerminalBridge not available'); },
     dispose: () => { throw new Error('TerminalBridge not available'); }
   });
 }

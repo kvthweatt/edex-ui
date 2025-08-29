@@ -47,14 +47,14 @@ class TerminalBridge {
             // Create the terminal instance
             const terminal = new this.Terminal(options);
             
-            // Create and load addons
+            // Create addons (but don't load ligatures yet - it needs terminal to be opened first)
             const fitAddon = new this.FitAddon();
             const webglAddon = new this.WebglAddon();
             const ligaturesAddon = new this.LigaturesAddon();
             
+            // Load addons that can be loaded before opening
             terminal.loadAddon(fitAddon);
             terminal.loadAddon(webglAddon);
-            terminal.loadAddon(ligaturesAddon);
             
             // Store terminal and addons
             this.terminals.set(id, {
@@ -95,6 +95,16 @@ class TerminalBridge {
                 const parentElement = document.querySelector(parentSelector);
                 if (parentElement) {
                     terminal.open(parentElement);
+                    
+                    // Now that terminal is opened, we can load the ligatures addon
+                    try {
+                        terminal.loadAddon(ligaturesAddon);
+                        console.log(`[TERMINAL-BRIDGE] Ligatures addon loaded for terminal ${id}`);
+                    } catch (error) {
+                        console.warn(`[TERMINAL-BRIDGE] Failed to load ligatures addon for terminal ${id}:`, error);
+                        // Continue without ligatures - it's not critical
+                    }
+                    
                     fitAddon.fit();
                     terminal.focus();
                     console.log(`[TERMINAL-BRIDGE] Terminal ${id} opened successfully`);
@@ -125,6 +135,18 @@ class TerminalBridge {
         const terminalData = this.terminals.get(id);
         if (terminalData) {
             terminalData.terminal.write(data);
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Write line to terminal
+     */
+    writeln(id, data) {
+        const terminalData = this.terminals.get(id);
+        if (terminalData) {
+            terminalData.terminal.writeln(data);
             return true;
         }
         return false;
@@ -196,18 +218,39 @@ class TerminalBridge {
     }
     
     /**
-     * Attach WebSocket to terminal
+     * Attach WebSocket to terminal via URL
+     * Since WebSocket objects can't cross contextBridge, we create the WebSocket here
      */
-    attachWebSocket(id, websocket) {
+    attachWebSocket(id, websocketUrl) {
         const terminalData = this.terminals.get(id);
         if (terminalData) {
-            // Create and load attach addon
-            const attachAddon = new this.AttachAddon(websocket);
-            terminalData.terminal.loadAddon(attachAddon);
-            terminalData.attachAddon = attachAddon;
-            
-            this.sockets.set(id, websocket);
-            console.log(`[TERMINAL-BRIDGE] WebSocket attached to terminal ${id}`);
+            try {
+                // Create WebSocket in preload context
+                const websocket = new WebSocket(websocketUrl);
+                
+                // Create and load attach addon
+                const attachAddon = new this.AttachAddon(websocket);
+                terminalData.terminal.loadAddon(attachAddon);
+                terminalData.attachAddon = attachAddon;
+                
+                this.sockets.set(id, websocket);
+                console.log(`[TERMINAL-BRIDGE] WebSocket attached to terminal ${id} at ${websocketUrl}`);
+                return true;
+            } catch (error) {
+                console.error(`[TERMINAL-BRIDGE] Failed to attach WebSocket to terminal ${id}:`, error);
+                return false;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Send data through WebSocket
+     */
+    send(id, data) {
+        const socket = this.sockets.get(id);
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(data);
             return true;
         }
         return false;

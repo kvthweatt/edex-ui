@@ -113,6 +113,7 @@ class Terminal {
                 cursorBlink: window.theme.terminal.cursorBlink || true,
                 cursorStyle: window.theme.terminal.cursorStyle || "block",
                 allowTransparency: window.theme.terminal.allowTransparency || false,
+                allowProposedApi: true, // Required for ligatures addon
                 fontFamily: window.theme.terminal.fontFamily || "Fira Mono",
                 fontSize: window.theme.terminal.fontSize || window.settings.termFontSize || 15,
                 fontWeight: window.theme.terminal.fontWeight || "normal",
@@ -158,10 +159,9 @@ class Terminal {
             console.log('[TERMINAL] Terminal created successfully via TerminalBridge');
             
             // Set up custom key event handler after terminal is ready
-            setTimeout(() => {
-                // Find the textarea and set up key handler
+            const setupKeyHandlers = () => {
                 const textArea = document.querySelector('.xterm-helper-textarea');
-                if (textArea) {
+                if (textArea && window.keyboard) {
                     textArea.addEventListener('keydown', e => {
                         window.keyboard.keydownHandler(e);
                     });
@@ -175,13 +175,19 @@ class Terminal {
                             window.toggleFullScreen();
                         }
                     });
+                    console.log('[TERMINAL] Key handlers set up successfully');
+                } else if (!window.keyboard) {
+                    console.warn('[TERMINAL] Keyboard not ready yet, retrying in 500ms');
+                    setTimeout(setupKeyHandlers, 500);
                 } else {
                     console.warn('[TERMINAL] Could not find xterm textarea for key handler setup');
                 }
-            }, 100);
+            };
+            
+            setTimeout(setupKeyHandlers, 100);
 
             this.Ipc.send("terminal_channel-"+this.port, "Renderer startup");
-            this.Ipc.on("terminal_channel-"+this.port, (e, ...args) => {
+            this.Ipc.receive("terminal_channel-"+this.port, (...args) => {
                 switch(args[0]) {
                     case "New cwd":
                         this.cwd = args[1];
@@ -207,21 +213,40 @@ class Terminal {
             let sockHost = opts.host || "127.0.0.1";
             let sockPort = this.port;
 
-            this.socket = new WebSocket("ws://"+sockHost+":"+sockPort);
-            this.socket.onopen = () => {
-                // Attach WebSocket through bridge
-                window.terminalBridge.attachWebSocket(this.id, this.socket);
-                this.fit();
-            };
-            this.socket.onerror = e => {throw JSON.stringify(e)};
-            this.socket.onclose = e => {
-                if (this.onclose) {
-                    this.onclose(e);
+            // Attach WebSocket through bridge using URL (WebSocket objects can't cross contextBridge)
+            let websocketUrl = "ws://"+sockHost+":"+sockPort;
+            const socketSuccess = window.terminalBridge.attachWebSocket(this.id, websocketUrl);
+            if (!socketSuccess) {
+                console.error('[TERMINAL] Failed to attach WebSocket through bridge');
+            }
+            
+            // Set up additional WebSocket handling if needed (for onclose callback)
+            this.socket = { 
+                url: websocketUrl,
+                onclose: null,
+                close: () => {
+                    // The actual WebSocket is managed by the bridge, so we just trigger callbacks
+                    if (this.onclose) {
+                        this.onclose({ reason: 'Manual close' });
+                    }
                 }
             };
+            
+            // Trigger fit and initial prompt after a short delay to ensure WebSocket connection is established
+            setTimeout(() => {
+                this.fit();
+                // Send a carriage return to trigger the initial shell prompt
+                setTimeout(() => {
+                    this.write("\r");
+                }, 500);
+            }, 100);
 
+            // Note: WebSocket message handling is now done inside the TerminalBridge
+            // The actual WebSocket lives in the preload context and is managed by the bridge
             this.lastSoundFX = Date.now();
-            this.socket.addEventListener("message", e => {
+            
+            // Set up data event handler through bridge to handle sound effects and globe features
+            window.terminalBridge.on(this.id, 'onData', (data) => {
                 let d = Date.now();
 
                 if (d - this.lastSoundFX > 30) {
@@ -233,9 +258,9 @@ class Terminal {
                     this.fit();
                 }
 
-                // See #397
+                // See #397 - Extract IP addresses for globe visualization
                 if (!window.settings.experimentalGlobeFeatures) return;
-                let ips = e.data.match(/((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/g);
+                let ips = data.match(/((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/g);
                 if (ips !== null && ips.length >= 1) {
                     ips = ips.filter((val, index, self) => { return self.indexOf(val) === index; });
                     ips.forEach(ip => {
@@ -308,11 +333,17 @@ class Terminal {
             };
 
             this.write = cmd => {
-                this.socket.send(cmd);
+                const success = window.terminalBridge.send(this.id, cmd);
+                if (!success) {
+                    console.warn('[TERMINAL] Failed to send command through WebSocket');
+                }
             };
 
             this.writelr = cmd => {
-                this.socket.send(cmd+"\r");
+                const success = window.terminalBridge.send(this.id, cmd + "\r");
+                if (!success) {
+                    console.warn('[TERMINAL] Failed to send command through WebSocket');
+                }
             };
 
             this.clipboard = {
