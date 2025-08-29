@@ -36,16 +36,132 @@
         <!-- Load dependency js -->
         <!-- <script src="node_modules/pdfjs-dist/build/pdf.mjs" type="module"></script> -->
         
-        <!-- Module.exports shim for browser compatibility -->
+        <!-- Minimal require() shim for browser compatibility -->
         <script>
-            // Create a simple module.exports shim for browser context
+            // Provide basic require() shim for remaining legacy code
+            window.require = function(name) {
+                switch(name) {
+                    case 'color':
+                        return window.Color;
+                    case './assets/icons/file-icons.json':
+                        return window.fileIcons || {};
+                    case './assets/misc/file-icons-match.js':
+                        return window.fileIconsMatcher || function() { return 'unknown'; };
+                    case 'mime-types':
+                        return window.mimeTypes || { lookup: () => 'application/octet-stream', charset: () => null };
+                    case 'mime-db':
+                        return window.mimeDb || {};
+                    case 'path':
+                        // Simple path shim for browser
+                        return {
+                            extname: (p) => {
+                                const match = p.match(/\.[^.]*$/);
+                                return match ? match[0] : '';
+                            },
+                            basename: (p) => p.split(/[\\\/]/).pop(),
+                            dirname: (p) => p.replace(/[\\\/][^\\\/]*$/, ''),
+                            join: (...args) => args.join('/').replace(/\/+/g, '/'),
+                            resolve: (...args) => args.join('/').replace(/\/+/g, '/')
+                        };
+                    case 'fs':
+                        // Minimal fs shim for addons that check for fs existence
+                        return { existsSync: () => false, readFileSync: () => '', writeFileSync: () => {} };
+                    case 'util':
+                        // Minimal util shim for Node.js util functions
+                        return { 
+                            inherits: (child, parent) => {
+                                child.prototype = Object.create(parent.prototype);
+                                child.prototype.constructor = child;
+                            },
+                            isArray: Array.isArray,
+                            isString: (obj) => typeof obj === 'string',
+                            isFunction: (obj) => typeof obj === 'function'
+                        };
+                    case 'stream':
+                        // Minimal stream shim
+                        return {
+                            Readable: class Readable {},
+                            Writable: class Writable {},
+                            Transform: class Transform {}
+                        };
+                    case 'https':
+                    case 'process':
+                        throw new Error(`require('${name}') not allowed in browser context. Use IPC instead.`);
+                    default:
+                        throw new Error(`require('${name}') called in browser context - not implemented`);
+                }
+            };
+            
+            // Create minimal module.exports and exports for compatibility
             if (typeof module === 'undefined') {
-                window.module = {};
+                window.module = { exports: {} };
             }
-            if (typeof module.exports === 'undefined') {
-                module.exports = {};
+            if (typeof exports === 'undefined') {
+                window.exports = window.module.exports;
             }
-            console.log('[UI] Module.exports shim loaded');
+            
+            console.log('[UI] Require and module shims loaded');
+        </script>
+        
+        <!-- Load XTerm classes using factory functions to avoid contextBridge issues -->
+        <script>
+            console.log('[UI] Loading XTerm classes from factory...');
+            
+            if (typeof window.XTermFactory !== 'undefined') {
+                try {
+                    console.log('[UI] XTermFactory available:', Object.keys(window.XTermFactory));
+                    
+                    // Expose XTerm classes globally using the factory approach
+                    window.XTerminal = window.XTermFactory.Terminal;
+                    window.xTerm = window.XTermFactory.Terminal;
+                    window.FitAddon = window.XTermFactory.FitAddon;
+                    window.AttachAddon = window.XTermFactory.AttachAddon;
+                    window.LigaturesAddon = window.XTermFactory.LigaturesAddon;
+                    window.WebglAddon = window.XTermFactory.WebglAddon;
+                    
+                    // Also expose the factory functions for direct use
+                    window.createTerminal = window.XTermFactory.createTerminal;
+                    window.createFitAddon = window.XTermFactory.createFitAddon;
+                    window.createAttachAddon = window.XTermFactory.createAttachAddon;
+                    window.createLigaturesAddon = window.XTermFactory.createLigaturesAddon;
+                    window.createWebglAddon = window.XTermFactory.createWebglAddon;
+                    
+                    console.log('[UI] XTerm classes loaded successfully from factory');
+                    console.log('[UI] XTerminal available:', typeof window.XTerminal);
+                    console.log('[UI] FitAddon available:', typeof window.FitAddon);
+                    console.log('[UI] AttachAddon available:', typeof window.AttachAddon);
+                    console.log('[UI] LigaturesAddon available:', typeof window.LigaturesAddon);
+                    console.log('[UI] WebglAddon available:', typeof window.WebglAddon);
+                    
+                    // Test XTerm class instantiation using factory function
+                    try {
+                        console.log('[UI] Testing XTerm instantiation using factory...');
+                        const testTerminal = window.createTerminal();
+                        console.log('[UI] XTerm factory instantiation test SUCCESS:', typeof testTerminal);
+                        testTerminal.dispose?.(); // Clean up if possible
+                    } catch (error) {
+                        console.error('[UI] XTerm factory instantiation test FAILED:', error);
+                        console.error('[UI] Error details:', error.stack);
+                    }
+                    
+                    // Test direct constructor instantiation
+                    try {
+                        console.log('[UI] Testing XTerm instantiation using constructor...');
+                        const testTerminal2 = new window.XTerminal();
+                        console.log('[UI] XTerm constructor instantiation test SUCCESS:', typeof testTerminal2);
+                        testTerminal2.dispose?.(); // Clean up if possible
+                    } catch (error) {
+                        console.error('[UI] XTerm constructor instantiation test FAILED:', error);
+                        console.error('[UI] Error details:', error.stack);
+                    }
+                } catch (error) {
+                    console.error('[UI] Failed to load XTerm classes from factory:', error);
+                    console.error('[UI] Error details:', error.stack);
+                }
+            } else {
+                console.error('[UI] XTermFactory not available from preload!');
+                console.log('[UI] Available preload objects:', Object.keys(window).filter(k => k.includes('XTerm')));
+            }
         </script>
         
         <!-- Load main modules classes -->
@@ -53,7 +169,7 @@
         <script src="classes/terminal.class.js"></script>
         <script src="classes/docReader.class.js"></script>
         <script src="classes/mediaPlayer.class.js"></script>
-        <script src="classes/filesystem.class.js"></script>
+        <script src="classes/filesystem-browser.class.js"></script>
         <script src="classes/keyboard.class.js"></script>
         <script src="classes/updateChecker.class.js"></script>
         <!-- Load secondary modules classes -->
@@ -72,6 +188,96 @@
         
         <!-- Load Howler for audio management -->
         <script src="node_modules/howler/dist/howler.core.min.js"></script>
+        
+        <!-- Load Smoothie Charts for graphs -->
+        <script>
+            // Ensure exports points to window for Smoothie
+            // Save current state
+            var savedExports = window.exports;
+            var savedModuleExports = window.module ? window.module.exports : undefined;
+            
+            // Set up exports to point to window for Smoothie loading
+            window.exports = window;
+            if (window.module) {
+                window.module.exports = window;
+            }
+        </script>
+        <script src="node_modules/smoothie/smoothie.js"></script>
+        <script>
+            // Restore original exports state after Smoothie loads
+            window.exports = savedExports;
+            if (window.module) {
+                window.module.exports = savedModuleExports;
+            }
+            
+            console.log('[UI] Smoothie charts available:', typeof SmoothieChart);
+            console.log('[UI] TimeSeries available:', typeof TimeSeries);
+        </script>
+        
+        <!-- Load mime-db and mime-types for file type detection -->
+        <script>
+            // Load mime-db JSON data
+            fetch('./node_modules/mime-db/db.json')
+                .then(response => response.json())
+                .then(data => {
+                    window.mimeDb = data;
+                    console.log('[UI] Mime database loaded');
+                })
+                .catch(err => {
+                    console.warn('[UI] Could not load mime database:', err);
+                    window.mimeDb = {};
+                });
+        </script>
+        <script src="node_modules/mime-types/index.js"></script>
+        <script>
+            // Expose mime-types globally
+            if (typeof mimeTypes !== 'undefined') {
+                window.mimeTypes = mimeTypes;
+            } else if (typeof module !== 'undefined' && module.exports) {
+                window.mimeTypes = module.exports;
+                module.exports = {}; // Reset for next module
+                window.exports = module.exports; // Reset exports too
+            }
+        </script>
+        
+        <!-- Load ENCOM Globe for network visualization -->
+        <script src="assets/vendor/encom-globe.js"></script>
+        
+        <!-- XTerm addons are now loaded via preload script for better security and reliability -->
+        
+        <!-- Load color library fallback -->
+        <script src="browser_shims/color-loader.js"></script>
+        
+        <!-- Load file icons resources -->
+        <script>
+            // Load file icons JSON data
+            fetch('./assets/icons/file-icons.json')
+                .then(response => response.json())
+                .then(data => {
+                    window.fileIcons = data;
+                    console.log('[UI] File icons loaded');
+                })
+                .catch(err => {
+                    console.warn('[UI] Could not load file icons:', err);
+                    window.fileIcons = {};
+                });
+        </script>
+        <script src="assets/misc/file-icons-match.js"></script>
+        <script>
+            // Ensure file icon matcher is exposed properly
+            if (typeof module !== 'undefined' && module.exports && typeof module.exports === 'function') {
+                window.fileIconsMatcher = module.exports;
+                module.exports = {}; // Reset for next module
+            }
+        </script>
+        
+        <!-- IPC compatibility bridge -->
+        <script>
+            // Create ipc alias for legacy code compatibility
+            if (typeof window.electronAPI !== 'undefined') {
+                window.ipc = window.electronAPI;
+            }
+        </script>
     </head>
     <body class="solidBackground">
         <section id="boot_screen">

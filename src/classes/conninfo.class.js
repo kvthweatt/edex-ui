@@ -16,12 +16,26 @@ class Conninfo {
 
         this.current = document.querySelector("#mod_conninfo_innercontainer > h1 > i");
         this.total = document.querySelector("#mod_conninfo_innercontainer > h2 > i");
-        this._pb = require("pretty-bytes");
+        
+        // Pretty bytes formatter function (basic implementation)
+        this._pb = (bytes) => {
+            if (!bytes) return '0B';
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + sizes[i];
+        };
 
-        // Init Smoothie
-        let TimeSeries = require("smoothie").TimeSeries;
-        let SmoothieChart = require("smoothie").SmoothieChart;
-
+        // Check if Smoothie charts are available globally
+        if (typeof TimeSeries === 'undefined' || typeof SmoothieChart === 'undefined') {
+            console.warn('Smoothie charts library not available for network traffic, using basic display');
+            this._initBasic();
+            return;
+        }
+        
+        this._initCharts();
+    }
+    
+    _initCharts() {
         // Set chart options
         let chartOptions = [{
             limitFPS: 40,
@@ -61,29 +75,55 @@ class Conninfo {
             this.updateInfo();
         }, 1000);
     }
+    
+    _initBasic() {
+        // Hide canvas elements since no charts available
+        document.getElementById("mod_conninfo_canvas_top").style.display = 'none';
+        document.getElementById("mod_conninfo_canvas_bottom").style.display = 'none';
+        
+        // Add text display for basic mode
+        const container = document.getElementById("mod_conninfo_innercontainer");
+        const basicDisplay = document.createElement('div');
+        basicDisplay.id = 'mod_conninfo_basic';
+        basicDisplay.innerHTML = '<h3>Charts unavailable - Text only mode</h3>';
+        container.appendChild(basicDisplay);
+        
+        // Init updater for basic mode
+        this.updateInfo();
+        this.infoUpdater = setInterval(() => {
+            this.updateInfo();
+        }, 1000);
+    }
+    
     updateInfo() {
         let time = new Date().getTime();
 
         if (window.mods.netstat.offline || window.mods.netstat.iface === null) {
-            this.series[0].append(time, 0);
-            this.series[1].append(time, 0);
+            // Only update chart data if charts are available
+            if (this.series && this.series[0]) {
+                this.series[0].append(time, 0);
+                this.series[1].append(time, 0);
+            }
             document.querySelector("div#mod_conninfo").setAttribute("class", "offline");
             return;
         } else {
             document.querySelector("div#mod_conninfo").setAttribute("class", "");
             window.si.networkStats(window.mods.netstat.iface).then(data => {
-
-                let max0 = this.series[0].maxValue;
-                let max1 = -this.series[1].minValue;
-                if (max0 > max1) {
-                    this.series[1].minValue = -max0;
-                } else if (max1 > max0) {
-                    this.series[0].maxValue = max1;
+                // Only update chart data if charts are available
+                if (this.series && this.series[0]) {
+                    let max0 = this.series[0].maxValue;
+                    let max1 = -this.series[1].minValue;
+                    if (max0 > max1) {
+                        this.series[1].minValue = -max0;
+                    } else if (max1 > max0) {
+                        this.series[0].maxValue = max1;
+                    }
+    
+                    this.series[0].append(time, data[0].tx_sec/125000);
+                    this.series[1].append(time, -data[0].rx_sec/125000);
                 }
 
-                this.series[0].append(time, data[0].tx_sec/125000);
-                this.series[1].append(time, -data[0].rx_sec/125000);
-
+                // Always update text displays
                 this.total.innerText = `${this._pb(data[0].tx_bytes)} OUT, ${this._pb(data[0].rx_bytes)} IN`.toUpperCase();
                 this.current.innerText = "UP " + parseFloat(data[0].tx_sec/125000).toFixed(2) + " DOWN " + parseFloat(data[0].rx_sec/125000).toFixed(2);
             });

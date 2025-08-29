@@ -1,15 +1,37 @@
 class LocationGlobe {
     constructor(parentId) {
         if (!parentId) throw "Missing parameters";
-
-        const path = require("path");
-
-        this._geodata = require(path.join(__dirname, "assets/misc/grid.json"));
-        require(path.join(__dirname, "assets/vendor/encom-globe.js"));
-        this.ENCOM = window.ENCOM;
+        
+        this.parentId = parentId;
+        
+        // Load geodata and globe library asynchronously
+        this._initAsync();
+    }
+    
+    async _initAsync() {
+        try {
+            // Load geodata from assets
+            const gridPath = window.electronAPI.resolveAssetPath('misc/grid.json');
+            const response = await fetch(gridPath);
+            this._geodata = await response.json();
+            
+            // Load the globe library (should be available globally via script tag)
+            this.ENCOM = window.ENCOM;
+            
+            this._setupDOM();
+        } catch (error) {
+            console.error('Failed to initialize LocationGlobe:', error);
+            // Fallback initialization
+            this._geodata = { tiles: [] };
+            this.ENCOM = window.ENCOM;
+            this._setupDOM();
+        }
+    }
+    
+    _setupDOM() {
 
         // Create DOM and include lib
-        this.parent = document.getElementById(parentId);
+        this.parent = document.getElementById(this.parentId);
         this.parent.innerHTML += `<div id="mod_globe">
             <div id="mod_globe_innercontainer">
                 <h1>WORLD VIEW<i>GLOBAL NETWORK MAP</i></h1>

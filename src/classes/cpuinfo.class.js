@@ -154,7 +154,10 @@ class Cpuinfo {
             this.tasksUpdater = setInterval(() => {
                 this.updateCPUtasks();
             }, 5000);
-        });
+        } catch (error) {
+            console.error('Failed to initialize CPU info with charts:', error);
+            this._initBasic();
+        }
     }
     updateCPUload() {
         if (this.updatingCPUload) return;

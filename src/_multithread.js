@@ -65,7 +65,23 @@ if (cluster.isPrimary) {
         let selectedID = lastID+1;
         if (selectedID > numCPUs-1) selectedID = 0;
 
-        cluster.workers[workers[selectedID]].send(JSON.stringify({
+        const worker = cluster.workers[workers[selectedID]];
+        if (!worker) {
+            signale.warn(`Worker ${workers[selectedID]} not available`);
+            // Fallback to direct call
+            if (queue[id] && !queue[id].isDestroyed()) {
+                si[type](arg).then(res => {
+                    queue[id].send("systeminformation-reply-"+id, res);
+                    delete queue[id];
+                }).catch(error => {
+                    signale.warn(`Error in direct systeminformation.${type}:`, error.message);
+                    delete queue[id];
+                });
+            }
+            return;
+        }
+
+        worker.send(JSON.stringify({
             id,
             type,
             arg
@@ -135,12 +151,49 @@ if (cluster.isPrimary) {
     signale.info("Multithread worker started at "+process.pid);
 
     process.on("message", msg => {
-        msg = JSON.parse(msg);
-        si[msg.type](msg.arg).then(res => {
+        try {
+            msg = JSON.parse(msg);
+            
+            // Check if the function exists
+            if (!si[msg.type] || typeof si[msg.type] !== 'function') {
+                signale.warn(`Unknown systeminformation function: ${msg.type}`);
+                process.send(JSON.stringify({
+                    id: msg.id,
+                    error: `Unknown function: ${msg.type}`
+                }));
+                return;
+            }
+            
+            // Call the function and handle both Promise and non-Promise returns
+            const result = si[msg.type](msg.arg);
+            
+            if (result && typeof result.then === 'function') {
+                // It's a Promise
+                result.then(res => {
+                    process.send(JSON.stringify({
+                        id: msg.id,
+                        res
+                    }));
+                }).catch(error => {
+                    signale.warn(`Error in systeminformation.${msg.type}:`, error.message);
+                    process.send(JSON.stringify({
+                        id: msg.id,
+                        error: error.message
+                    }));
+                });
+            } else {
+                // It's not a Promise, send result directly
+                process.send(JSON.stringify({
+                    id: msg.id,
+                    res: result
+                }));
+            }
+        } catch (error) {
+            signale.warn(`Error processing systeminformation message:`, error.message);
             process.send(JSON.stringify({
                 id: msg.id,
-                res
+                error: error.message
             }));
-        });
+        }
     });
 }

@@ -1,4 +1,45 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const path = require('path');
+
+// Load XTerm classes and expose them as factory functions to avoid contextBridge serialization issues
+try {
+  const { Terminal } = require(path.join(__dirname, 'node_modules', '@xterm', 'xterm'));
+  const { FitAddon } = require(path.join(__dirname, 'node_modules', '@xterm', 'addon-fit'));
+  const { AttachAddon } = require(path.join(__dirname, 'node_modules', '@xterm', 'addon-attach'));
+  const { LigaturesAddon } = require(path.join(__dirname, 'node_modules', '@xterm', 'addon-ligatures'));
+  const { WebglAddon } = require(path.join(__dirname, 'node_modules', '@xterm', 'addon-webgl'));
+  
+  // Expose XTerm classes as factory functions to avoid class serialization issues
+  contextBridge.exposeInMainWorld('XTermFactory', {
+    createTerminal: (options) => new Terminal(options),
+    createFitAddon: () => new FitAddon(),
+    createAttachAddon: (socket) => new AttachAddon(socket),
+    createLigaturesAddon: () => new LigaturesAddon(),
+    createWebglAddon: () => new WebglAddon(),
+    // Also expose the class constructors as functions that return new instances
+    Terminal: Terminal,
+    FitAddon: FitAddon,
+    AttachAddon: AttachAddon,
+    LigaturesAddon: LigaturesAddon,
+    WebglAddon: WebglAddon
+  });
+  
+  console.log('[PRELOAD] XTerm factory functions loaded successfully');
+} catch (error) {
+  console.error('[PRELOAD] Failed to load XTerm classes:', error);
+  contextBridge.exposeInMainWorld('XTermFactory', {
+    createTerminal: () => { throw new Error('XTerm not available'); },
+    createFitAddon: () => { throw new Error('FitAddon not available'); },
+    createAttachAddon: () => { throw new Error('AttachAddon not available'); },
+    createLigaturesAddon: () => { throw new Error('LigaturesAddon not available'); },
+    createWebglAddon: () => { throw new Error('WebglAddon not available'); },
+    Terminal: null,
+    FitAddon: null,
+    AttachAddon: null,
+    LigaturesAddon: null,
+    WebglAddon: null
+  });
+}
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -159,5 +200,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       id += alphabet[Math.floor(Math.random() * alphabet.length)];
     }
     return id;
-  }
+  },
+  
+  // Network operations for Netstat class
+  networkPing: (target, port, localAddress) => ipcRenderer.invoke('network-ping', target, port, localAddress),
+  httpsGet: (options) => ipcRenderer.invoke('https-get', options),
+  
+  // GeoIP operations
+  geoipInit: (cacheDir) => ipcRenderer.invoke('geoip-init', cacheDir),
+  geoipLookup: (ip) => ipcRenderer.invoke('geoip-lookup', ip)
 });

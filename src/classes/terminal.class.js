@@ -1,14 +1,78 @@
 class Terminal {
     constructor(opts) {
+        console.log('[TERMINAL] Constructor called with opts:', opts);
+        
         if (opts.role === "client") {
+            console.log('[TERMINAL] Client mode - checking dependencies');
             if (!opts.parentId) throw "Missing options";
 
-            this.xTerm = require("@xterm/xterm").Terminal;
-            const {AttachAddon} = require("@xterm/addon-attach");
-            const {FitAddon} = require("@xterm/addon-fit");
-            const {LigaturesAddon} = require("@xterm/addon-ligatures");
-            const {WebglAddon} = require("@xterm/addon-webgl");
-            this.Ipc = require("electron").ipcRenderer;
+            // Try multiple sources for XTerm Terminal class, including factory approach
+            this.xTerm = window.XTerminal || 
+                        (window.XTermFactory && window.XTermFactory.Terminal) ||
+                        (window.XTermClasses && window.XTermClasses.Terminal) || 
+                        window.Terminal;
+            
+            // Enhanced fallback detection with direct assignment
+            if (!this.xTerm && window.Terminal) {
+                this.xTerm = window.Terminal;
+            }
+            
+            // If we still don't have it, try to use factory function directly
+            if (!this.xTerm && window.createTerminal) {
+                console.log('[TERMINAL] Using factory function approach instead of constructor');
+                this.useFactoryPattern = true;
+            }
+            
+            // Ensure we have the actual constructor function, not a wrapped reference
+            if (this.xTerm && typeof this.xTerm === 'function') {
+                // Test if it's a proper constructor
+                try {
+                    // This should not throw for a proper constructor
+                    const TestClass = this.xTerm;
+                    if (TestClass.prototype && TestClass.prototype.constructor === TestClass) {
+                        console.log('[TERMINAL] XTerm constructor validated successfully');
+                    }
+                } catch (error) {
+                    console.warn('[TERMINAL] XTerm constructor validation failed:', error);
+                }
+            }
+            
+            // Load addon classes with fallbacks
+            const AttachAddon = window.AttachAddon || (window.XTermClasses && window.XTermClasses.AttachAddon);
+            const FitAddon = window.FitAddon || (window.XTermClasses && window.XTermClasses.FitAddon);
+            const LigaturesAddon = window.LigaturesAddon || (window.XTermClasses && window.XTermClasses.LigaturesAddon);
+            const WebglAddon = window.WebglAddon || (window.XTermClasses && window.XTermClasses.WebglAddon);
+            this.Ipc = window.electronAPI;
+            
+            console.log('[TERMINAL] Dependencies loaded:', {
+                xTerm: typeof this.xTerm,
+                AttachAddon: typeof AttachAddon,
+                FitAddon: typeof FitAddon, 
+                LigaturesAddon: typeof LigaturesAddon,
+                WebglAddon: typeof WebglAddon,
+                Ipc: typeof this.Ipc
+            });
+            
+            // Debug the exact XTerm class we received
+            console.log('[TERMINAL] XTerm class details:', {
+                name: this.xTerm?.name,
+                prototype: !!this.xTerm?.prototype,
+                constructor: !!this.xTerm?.prototype?.constructor,
+                toString: this.xTerm?.toString().substring(0, 100)
+            });
+            
+            // Try to inspect the actual function
+            if (this.xTerm) {
+                console.log('[TERMINAL] XTerm function source (first 200 chars):', this.xTerm.toString().substring(0, 200));
+            }
+            
+            if (!this.xTerm) {
+                console.error('[TERMINAL] XTerminal class not available!');
+                console.error('[TERMINAL] Available globals containing "Term":', Object.keys(window).filter(k => k.toLowerCase().includes('term')));
+                console.error('[TERMINAL] Available XTermClasses:', window.XTermClasses ? Object.keys(window.XTermClasses) : 'undefined');
+                console.error('[TERMINAL] Window object keys (sample):', Object.keys(window).slice(0, 20));
+                throw new Error('XTerminal class not available - check that XTerm is properly loaded');
+            }
 
             this.port = opts.port || 3000;
             this.cwd = "";
@@ -72,7 +136,8 @@ class Terminal {
                 });
             }
 
-            let color = require("color");
+            // Use globally loaded color library
+            let color = window.Color || function(c) { return { hex: () => c, grayscale: () => ({ mix: () => ({ hex: () => c }) }) }; };
             let colorify;
             if (doCustomFilter) {
                 colorify = (base, target) => {
@@ -97,7 +162,8 @@ class Terminal {
 
             let themeColor = `rgb(${window.theme.r}, ${window.theme.g}, ${window.theme.b})`;
 
-            this.term = new this.xTerm({
+            // Terminal configuration object
+            const terminalConfig = {
                 cols: 80,
                 rows: 24,
                 cursorBlink: window.theme.terminal.cursorBlink || true,
@@ -134,9 +200,29 @@ class Terminal {
                     brightCyan: window.theme.colors.brightCyan || colorify("#34e2e2", themeColor),
                     brightWhite: window.theme.colors.brightWhite || colorify("#eeeeec", themeColor)
                 }
-            });
-            let fitAddon = new FitAddon();
-            this.term.loadAddon(fitAddon);
+            };
+
+            // Create XTerm instance using factory function if available, otherwise use constructor
+            if (window.createTerminal && typeof window.createTerminal === 'function') {
+                console.log('[TERMINAL] Using factory function to create XTerm instance');
+                this.term = window.createTerminal(terminalConfig);
+            } else {
+                console.log('[TERMINAL] Using constructor to create XTerm instance');
+                const XTerminalClass = this.xTerm;
+                console.log('[TERMINAL] About to instantiate XTerm with class:', XTerminalClass?.name || 'unnamed');
+                this.term = new XTerminalClass(terminalConfig);
+            }
+            
+            console.log('[TERMINAL] About to create FitAddon, type:', typeof FitAddon);
+            try {
+                let fitAddon = new FitAddon();
+                console.log('[TERMINAL] FitAddon created successfully');
+                this.term.loadAddon(fitAddon);
+                console.log('[TERMINAL] FitAddon loaded successfully');
+            } catch (error) {
+                console.error('[TERMINAL] Error creating/loading FitAddon:', error);
+                throw error;
+            }
             this.term.open(document.getElementById(opts.parentId));
             this.term.loadAddon(new WebglAddon());
             let ligaturesAddon = new LigaturesAddon();

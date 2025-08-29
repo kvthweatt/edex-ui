@@ -698,6 +698,96 @@ app.on('ready', async () => {
         }
     });
     
+    // Network operations for Netstat class
+    ipcMain.handle('network-ping', async (event, target, port, localAddress) => {
+        const net = require('net');
+        return new Promise((resolve, reject) => {
+            const socket = new net.Socket();
+            const startTime = process.hrtime();
+            
+            socket.connect({ port, host: target, localAddress, family: 4 }, () => {
+                const timeArray = process.hrtime(startTime);
+                const time = (timeArray[0] * 1e9 + timeArray[1]) / 1e6;
+                socket.destroy();
+                resolve(time);
+            });
+            
+            socket.on('error', (error) => {
+                socket.destroy();
+                reject(error);
+            });
+            
+            socket.setTimeout(1900, () => {
+                socket.destroy();
+                reject(new Error('Socket timeout'));
+            });
+        });
+    });
+    
+    ipcMain.handle('https-get', async (event, options) => {
+        const https = require('https');
+        return new Promise((resolve, reject) => {
+            const req = https.get(options, (res) => {
+                let rawData = '';
+                
+                res.on('data', (chunk) => {
+                    rawData += chunk;
+                });
+                
+                res.on('end', () => {
+                    try {
+                        const data = JSON.parse(rawData);
+                        resolve(data);
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            });
+            
+            req.on('error', (error) => {
+                reject(error);
+            });
+            
+            req.setTimeout(5000, () => {
+                req.abort();
+                reject(new Error('Request timeout'));
+            });
+        });
+    });
+    
+    // GeoIP database operations
+    let geoLookup = { get: () => null };
+    let geoIPInitialized = false;
+    
+    ipcMain.handle('geoip-init', async (event, cacheDir) => {
+        if (geoIPInitialized) return { success: true };
+        
+        try {
+            const geolite2 = require('geolite2-redist');
+            const maxmind = require('maxmind');
+            
+            await geolite2.downloadDbs(cacheDir);
+            const lookup = await geolite2.open('GeoLite2-City', (path) => maxmind.open(path));
+            geoLookup = lookup;
+            geoIPInitialized = true;
+            
+            return { success: true };
+        } catch (error) {
+            signale.error('Failed to initialize GeoIP:', error);
+            geoIPInitialized = true; // Set to true to prevent retries
+            return { success: false, error: error.message };
+        }
+    });
+    
+    ipcMain.handle('geoip-lookup', (event, ip) => {
+        try {
+            const result = geoLookup.get(ip);
+            return result;
+        } catch (error) {
+            return null;
+        }
+    });
+    
     // Web frame operations  
     ipcMain.handle('set-visual-zoom-limits', (event, min, max) => {
         // This needs to be executed in the renderer process, not main
