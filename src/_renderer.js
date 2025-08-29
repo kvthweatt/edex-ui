@@ -121,9 +121,9 @@ window._loadTheme = theme => {
     }
 
     // Load fonts
-    let mainFont = new FontFace(theme.cssvars.font_main, `url("${path.join(fontsDir, theme.cssvars.font_main.toLowerCase().replace(/ /g, '_')+'.woff2').replace(/\\/g, '/')}")`);
-    let lightFont = new FontFace(theme.cssvars.font_main_light, `url("${path.join(fontsDir, theme.cssvars.font_main_light.toLowerCase().replace(/ /g, '_')+'.woff2').replace(/\\/g, '/')}")`);
-    let termFont = new FontFace(theme.terminal.fontFamily, `url("${path.join(fontsDir, theme.terminal.fontFamily.toLowerCase().replace(/ /g, '_')+'.woff2').replace(/\\/g, '/')}")`);
+    let mainFont = new FontFace(theme.cssvars.font_main, `url("${joinPath(fontsDir, theme.cssvars.font_main.toLowerCase().replace(/ /g, '_')+'.woff2')}")`);
+    let lightFont = new FontFace(theme.cssvars.font_main_light, `url("${joinPath(fontsDir, theme.cssvars.font_main_light.toLowerCase().replace(/ /g, '_')+'.woff2')}")`);
+    let termFont = new FontFace(theme.terminal.fontFamily, `url("${joinPath(fontsDir, theme.terminal.fontFamily.toLowerCase().replace(/ /g, '_')+'.woff2')}")`);
 
     document.fonts.add(mainFont);
     document.fonts.load("12px "+theme.cssvars.font_main);
@@ -204,7 +204,10 @@ function waitForFonts() {
 
 // A proxy function used to add multithreading to systeminformation calls - see backend process manager @ _multithread.js
 function initSystemInformationProxy() {
-    const { nanoid } = require("nanoid/non-secure");
+    // Simple nanoid implementation since we can't import it in renderer
+    const nanoid = () => {
+        return 'id_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    };
 
     window.si = new Proxy({}, {
         apply: () => {throw new Error("Cannot use sysinfo proxy directly as a function")},
@@ -215,13 +218,15 @@ function initSystemInformationProxy() {
 
                 return new Promise((resolve, reject) => {
                     let id = nanoid();
-                    ipc.once("systeminformation-reply-"+id, (e, res) => {
+                    window.electronAPI.receive("systeminformation-reply-"+id, (res) => {
                         if (callback) {
                             args[args.length - 1](res);
                         }
                         resolve(res);
+                        // Clean up the listener after use
+                        window.electronAPI.removeAllListeners("systeminformation-reply-"+id);
                     });
-                    ipc.send("systeminformation-call", prop, id, ...args);
+                    window.electronAPI.send("systeminformation-call", prop, id, ...args);
                 });
             };
         }
@@ -231,19 +236,32 @@ function initSystemInformationProxy() {
 // Init audio
 window.audioManager = new AudioManager();
 
-// See #223
-electron.remote.app.focus();
-
-let i = 0;
-if (window.settings.nointro || window.settings.nointroOverride) {
-    initGraphicalErrorHandling();
-    initSystemInformationProxy();
-    document.getElementById("boot_screen").remove();
-    document.body.setAttribute("class", "");
-    waitForFonts().then(initUI);
-} else {
-    displayLine();
+// Initialize paths, load config, and start app
+async function startApp() {
+    try {
+        await initializeConfig();
+        await loadCLIParameters();
+    } catch (error) {
+        console.error('Failed to initialize:', error);
+        // Show error on boot screen
+        document.getElementById("boot_screen").innerHTML += `<br/>ERROR: ${error.message}`;
+        return;
+    }
+    
+    let i = 0;
+    if (window.settings.nointro || window.settings.nointroOverride) {
+        initGraphicalErrorHandling();
+        initSystemInformationProxy();
+        document.getElementById("boot_screen").remove();
+        document.body.setAttribute("class", "");
+        waitForFonts().then(initUI);
+    } else {
+        displayLine();
+    }
 }
+
+// Start the application
+startApp();
 
 // Startup boot log
 function displayLine() {
