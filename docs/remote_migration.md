@@ -62,7 +62,23 @@ This document tracks the migration from the deprecated `@electron/remote` module
 5. `src/classes/netstat.class.js` - Migrated to IPC patterns
 6. `src/package.json` - Removed @electron/remote dependency
 
+### Additional Work Completed:
+
+#### Node-pty Dependency Investigation - 🔄 IN PROGRESS
+- [x] Identified node-pty build issues on Windows (ClangCL toolset missing)
+- [x] Analyzed terminal.class.js implementation (lines 1-200 client side, 226-425 server side)
+- [x] Confirmed xterm.js frontend with WebSocket communication to node-pty backend
+- [x] Verified current Terminal class uses node-pty for pseudo-terminal spawning
+- [ ] Evaluate alternatives to node-pty for improved security and build compatibility
+- [ ] Consider implementing terminal without native dependencies
+
+#### Build Environment Analysis:
+- [x] Confirmed Clang 20.1.8 installed (LLVM-MinGW distribution)
+- [x] Identified MSBuild ClangCL toolset missing for node-pty compilation
+- [x] Documented build failure when attempting `npm install node-pty@latest`
+
 ### Next Steps:
+- **Priority**: Resolve node-pty dependency or find secure alternative
 - Test the application thoroughly to ensure all functionality works
 - Consider enabling sandbox mode in webPreferences for even better security
 - Update any documentation to reflect the new IPC patterns
