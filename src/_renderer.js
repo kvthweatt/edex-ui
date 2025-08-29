@@ -664,20 +664,32 @@ window.openSettings = async () => {
     if (document.getElementById("settingsEditor")) return;
 
     // Build lists of available keyboards, themes, monitors
-    let keyboards, themes, monitors, ifaces;
-    fs.readdirSync(keyboardsDir).forEach(kb => {
-        if (!kb.endsWith(".json")) return;
-        kb = kb.replace(".json", "");
-        if (kb === window.settings.keyboard) return;
-        keyboards += `<option>${kb}</option>`;
-    });
-    fs.readdirSync(themesDir).forEach(th => {
-        if (!th.endsWith(".json")) return;
-        th = th.replace(".json", "");
-        if (th === window.settings.theme) return;
-        themes += `<option>${th}</option>`;
-    });
-    for (let i = 0; i < electron.remote.screen.getAllDisplays().length; i++) {
+    let keyboards = "", themes = "", monitors = "", ifaces = "";
+    try {
+        const kbFiles = await window.electronAPI.readDir(keyboardsDir);
+        kbFiles.forEach(kb => {
+            if (!kb.endsWith(".json")) return;
+            kb = kb.replace(".json", "");
+            if (kb === window.settings.keyboard) return;
+            keyboards += `<option>${kb}</option>`;
+        });
+    } catch (e) {
+        console.error('Failed to read keyboards directory:', e);
+    }
+    
+    try {
+        const themeFiles = await window.electronAPI.readDir(themesDir);
+        themeFiles.forEach(th => {
+            if (!th.endsWith(".json")) return;
+            th = th.replace(".json", "");
+            if (th === window.settings.theme) return;
+            themes += `<option>${th}</option>`;
+        });
+    } catch (e) {
+        console.error('Failed to read themes directory:', e);
+    }
+    const displays = await window.electronAPI.getAllDisplays();
+    for (let i = 0; i < displays.length; i++) {
         if (i !== window.settings.monitor) monitors += `<option>${i}</option>`;
     }
     let nets = await window.si.networkInterfaces();
@@ -690,7 +702,7 @@ window.openSettings = async () => {
 
     new Modal({
         type: "custom",
-        title: `Settings <i>(v${electron.remote.app.getVersion()})</i>`,
+        title: `Settings <i>(v${await window.electronAPI.getAppVersion()})</i>`,
         html: `<table id="settingsEditor">
                     <tr>
                         <th>Key</th>
@@ -873,10 +885,10 @@ window.openSettings = async () => {
                 <h6 id="settingsEditorStatus">Loaded values from memory</h6>
                 <br>`,
         buttons: [
-            {label: "Open in External Editor", action:`electron.shell.openPath('${settingsFile}');electronWin.minimize();`},
+            {label: "Open in External Editor", action:`window.electronAPI.shellOpenPath('${settingsFile}');window.electronAPI.minimizeWindow();`},
             {label: "Save to Disk", action: "window.writeSettingsFile()"},
             {label: "Reload UI", action: "window.location.reload(true);"},
-            {label: "Restart eDEX", action: "electron.remote.app.relaunch();electron.remote.app.quit();"}
+            {label: "Restart eDEX", action: "window.electronAPI.appRelaunch();"}
         ]
     }, () => {
         // Link the keyboard back to the terminal
@@ -887,10 +899,13 @@ window.openSettings = async () => {
     });
 };
 
-window.writeFile = (path) => {
-    fs.writeFile(path, document.getElementById("fileEdit").value, "utf-8", () => {
+window.writeFile = async (path) => {
+    try {
+        await window.electronAPI.writeFile(path, document.getElementById("fileEdit").value, "utf-8");
         document.getElementById("fedit-status").innerHTML = "<i>File saved.</i>";
-    });
+    } catch (error) {
+        document.getElementById("fedit-status").innerHTML = `<i>Error saving file: ${error.message}</i>`;
+    }
 };
 
 window.writeSettingsFile = () => {
@@ -929,18 +944,28 @@ window.writeSettingsFile = () => {
         }
     });
 
-    fs.writeFileSync(settingsFile, JSON.stringify(window.settings, "", 4));
-    document.getElementById("settingsEditorStatus").innerText = "New values written to settings.json file at "+new Date().toTimeString();
+    window.electronAPI.writeSettings(window.settings).then(() => {
+        document.getElementById("settingsEditorStatus").innerText = "New values written to settings.json file at "+new Date().toTimeString();
+    }).catch(err => {
+        document.getElementById("settingsEditorStatus").innerText = "Error writing settings: "+err.message;
+    });
 };
 
-window.toggleFullScreen = () => {
-    let useFullscreen = (electronWin.isFullScreen() ? false : true);
-    electronWin.setFullScreen(useFullscreen);
+window.toggleFullScreen = async () => {
+    try {
+        const isFullScreen = await window.electronAPI.isWindowFullScreen();
+        const useFullscreen = !isFullScreen;
+        await window.electronAPI.setWindowFullScreen(useFullscreen);
 
-    //Update settings
-    window.lastWindowState["useFullscreen"] = useFullscreen;
+        //Update settings
+        window.lastWindowState["useFullscreen"] = useFullscreen;
 
-    fs.writeFileSync(lastWindowStateFile, JSON.stringify(window.lastWindowState, "", 4));
+        window.electronAPI.writeWindowState(window.lastWindowState).catch(err => {
+            console.error('Failed to write window state:', err);
+        });
+    } catch (error) {
+        console.error('Failed to toggle fullscreen:', error);
+    }
 };
 
 // Display available keyboard shortcuts and custom shortcuts helper
@@ -990,7 +1015,7 @@ window.openShortcutsHelp = () => {
     window.keyboard.detach();
     new Modal({
         type: "custom",
-        title: `Available Keyboard Shortcuts <i>(v${electron.remote.app.getVersion()})</i>`,
+        title: `Available Keyboard Shortcuts <i>(v${await window.electronAPI.getAppVersion()})</i>`,
         html: `<h5>Using either the on-screen or a physical keyboard, you can use the following shortcuts:</h5>
                 <details open id="shortcutsHelpAccordeon1">
                     <summary>Emulator shortcuts</summary>
@@ -1017,7 +1042,7 @@ window.openShortcutsHelp = () => {
                 </details>
                 <br>`,
         buttons: [
-            {label: "Open Shortcuts File", action:`electron.shell.openPath('${shortcutsFile}');electronWin.minimize();`},
+            {label: "Open Shortcuts File", action:`window.electronAPI.shellOpenPath('${shortcutsFile}');window.electronAPI.minimizeWindow();`},
             {label: "Reload UI", action: "window.location.reload(true);"},
         ]
     }, () => {
@@ -1106,7 +1131,7 @@ window.useAppShortcut = action => {
             window.keyboard.togglePasswordMode();
             return true;
         case "DEV_DEBUG":
-            electron.remote.getCurrentWindow().webContents.toggleDevTools();
+            window.electronAPI.toggleDevTools();
             return true;
         case "DEV_RELOAD":
             window.location.reload(true);
@@ -1117,31 +1142,30 @@ window.useAppShortcut = action => {
     }
 };
 
-// Global keyboard shortcuts
-const globalShortcut = electron.remote.globalShortcut;
-globalShortcut.unregisterAll();
+// Global keyboard shortcuts - now handled through secure IPC
+window.electronAPI.globalShortcutUnregisterAll();
 
-window.registerKeyboardShortcuts = () => {
-    window.shortcuts.forEach(cut => {
+window.registerKeyboardShortcuts = async () => {
+    window.shortcuts.forEach(async cut => {
         if (!cut.enabled) return;
 
         if (cut.type === "app") {
             if (cut.action === "TAB_X") {
                 for (let i = 1; i <= 5; i++) {
                     let trigger = cut.trigger.replace("X", i);
-                    let dfn = () => { window.useAppShortcut(`TAB_${i}`) };
-                    globalShortcut.register(trigger, dfn);
+                    let callback = () => { window.useAppShortcut(`TAB_${i}`) };
+                    await window.electronAPI.globalShortcutRegister(trigger, callback);
                 }
             } else {
-                globalShortcut.register(cut.trigger, () => {
-                    window.useAppShortcut(cut.action);
-                });
+                let callback = () => { window.useAppShortcut(cut.action); };
+                await window.electronAPI.globalShortcutRegister(cut.trigger, callback);
             }
         } else if (cut.type === "shell") {
-            globalShortcut.register(cut.trigger, () => {
+            let callback = () => {
                 let fn = (cut.linebreak) ? "writelr" : "write";
                 window.term[window.currentTerm][fn](cut.action);
-            });
+            };
+            await window.electronAPI.globalShortcutRegister(cut.trigger, callback);
         } else {
             console.warn(`${cut.trigger} has unknown type`);
         }
@@ -1155,7 +1179,7 @@ window.addEventListener("focus", () => {
 });
 
 window.addEventListener("blur", () => {
-    globalShortcut.unregisterAll();
+    window.electronAPI.globalShortcutUnregisterAll();
 });
 
 // Prevent showing menu, exiting fullscreen or app with keyboard shortcuts
@@ -1178,14 +1202,15 @@ document.addEventListener("keydown", e => {
 });
 
 // Fix #265
-window.addEventListener("keyup", e => {
-    if (require("os").platform() === "win32" && e.key === "F4" && e.altKey === true) {
-        electron.remote.app.quit();
+window.addEventListener("keyup", async e => {
+    const platform = await window.electronAPI.getPlatform();
+    if (platform === "win32" && e.key === "F4" && e.altKey === true) {
+        window.electronAPI.appQuit();
     }
 });
 
 // Fix double-tap zoom on touchscreens
-electron.webFrame.setVisualZoomLevelLimits(1, 1);
+window.electronAPI.setVisualZoomLevelLimits(1, 1);
 
 // Resize terminal with window
 window.onresize = () => {
@@ -1198,29 +1223,33 @@ window.onresize = () => {
 
 // See #413
 window.resizeTimeout = null;
-let electronWin = electron.remote.getCurrentWindow();
-electronWin.on("resize", () => {
-    if (settings.keepGeometry === false) return;
+window.electronAPI.onWindowResize(() => {
+    if (window.settings.keepGeometry === false) return;
     clearTimeout(window.resizeTimeout);
-    window.resizeTimeout = setTimeout(() => {
-        let win = electron.remote.getCurrentWindow();
-        if (win.isFullScreen()) return false;
-        if (win.isMaximized()) {
-            win.unmaximize();
-            win.setFullScreen(true);
-            return false;
-        }
+    window.resizeTimeout = setTimeout(async () => {
+        try {
+            const isFullScreen = await window.electronAPI.isWindowFullScreen();
+            if (isFullScreen) return false;
+            
+            const isMaximized = await window.electronAPI.isWindowMaximized();
+            if (isMaximized) {
+                await window.electronAPI.unmaximizeWindow();
+                await window.electronAPI.setWindowFullScreen(true);
+                return false;
+            }
 
-        let size = win.getSize();
-
-        if (size[0] >= size[1]) {
-            win.setSize(size[0], parseInt(size[0] * 9 / 16));
-        } else {
-            win.setSize(size[1], parseInt(size[1] * 9 / 16));
+            const size = await window.electronAPI.getWindowSize();
+            if (size[0] >= size[1]) {
+                await window.electronAPI.setWindowSize(size[0], parseInt(size[0] * 9 / 16));
+            } else {
+                await window.electronAPI.setWindowSize(size[1], parseInt(size[1] * 9 / 16));
+            }
+        } catch (error) {
+            console.error('Error in window resize handler:', error);
         }
     }, 100);
 });
 
-electronWin.on("leave-full-screen", () => {
-    electron.remote.getCurrentWindow().setSize(960, 540);
+window.electronAPI.onWindowLeaveFullScreen(() => {
+    window.electronAPI.setWindowSize(960, 540);
 });
