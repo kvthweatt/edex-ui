@@ -22,8 +22,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // File System Operations
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
-  writeFile: (filePath, content) => ipcRenderer.invoke('write-file', filePath, content),
+  writeFile: (filePath, content, encoding) => ipcRenderer.invoke('write-file', filePath, content, encoding),
   listDirectory: (dirPath) => ipcRenderer.invoke('list-directory', dirPath),
+  readDir: (dirPath) => ipcRenderer.invoke('readdir-sync', dirPath),
+  writeSettings: (settings) => ipcRenderer.invoke('write-settings', settings),
+  writeWindowState: (state) => ipcRenderer.invoke('write-window-state', state),
   
   // General IPC communication
   send: (channel, data) => {
@@ -63,6 +66,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners(channel);
   },
   
+  // One-time communication (equivalent to ipc.once)
+  once: (channel, func) => {
+    const validChannels = [
+      'ttyspawn-reply',
+      'terminal_channel',
+      'getThemeOverride',
+      'getKbOverride',
+      'systeminformation-reply'
+    ];
+    
+    if (validChannels.some(prefix => channel.startsWith(prefix))) {
+      ipcRenderer.once(channel, (event, ...args) => func(...args));
+    }
+  },
+  
   // Additional methods to replace electron.remote usage
   getProcessVersions: () => ipcRenderer.invoke('get-process-versions'),
   
@@ -80,25 +98,39 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAllDisplays: () => ipcRenderer.invoke('get-all-displays'),
   
   // Window controls
-  isFullScreen: () => ipcRenderer.invoke('window-is-fullscreen'),
-  setFullScreen: (fullscreen) => ipcRenderer.invoke('window-set-fullscreen', fullscreen),
+  isWindowFullScreen: () => ipcRenderer.invoke('window-is-fullscreen'),
+  setWindowFullScreen: (fullscreen) => ipcRenderer.invoke('window-set-fullscreen', fullscreen),
   minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
-  isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+  isWindowMaximized: () => ipcRenderer.invoke('window-is-maximized'),
   maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
   unmaximizeWindow: () => ipcRenderer.invoke('window-unmaximize'),
   getWindowSize: () => ipcRenderer.invoke('window-get-size'),
   setWindowSize: (width, height) => ipcRenderer.invoke('window-set-size', width, height),
   toggleDevTools: () => ipcRenderer.invoke('toggle-dev-tools'),
   
+  // Window event handlers
+  onWindowResize: (callback) => {
+    ipcRenderer.on('window-resize', callback);
+  },
+  onWindowLeaveFullScreen: (callback) => {
+    ipcRenderer.on('window-leave-fullscreen', callback);
+  },
+  
   // Shell operations
   shellOpenPath: (path) => ipcRenderer.invoke('shell-open-path', path),
+  shellOpenExternal: (url) => ipcRenderer.invoke('shell-open-external', url),
   
   // App controls
   appRelaunch: () => ipcRenderer.invoke('app-relaunch'),
   appQuit: () => ipcRenderer.invoke('app-quit'),
   
   // Global shortcuts
-  globalShortcutRegister: (accelerator, callback) => ipcRenderer.invoke('global-shortcut-register', accelerator, callback),
+  globalShortcutRegister: (accelerator, callback) => {
+    // Store callback for later use
+    const callbackId = 'shortcut_' + Math.random().toString(36).substring(2, 15);
+    ipcRenderer.on('global-shortcut-' + callbackId, callback);
+    return ipcRenderer.invoke('global-shortcut-register', accelerator, callbackId);
+  },
   globalShortcutUnregister: (accelerator) => ipcRenderer.invoke('global-shortcut-unregister', accelerator),
   globalShortcutUnregisterAll: () => ipcRenderer.invoke('global-shortcut-unregister-all'),
   

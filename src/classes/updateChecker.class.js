@@ -1,16 +1,18 @@
 class UpdateChecker {
     constructor() {
+        this.init();
+    }
+
+    async init() {
         let https = require("https");
-        let electron = require("electron");
-        let remote = require("@electron/remote");
-        let current = remote.app.getVersion();
+        let current = await window.electronAPI.getAppVersion();
 
         this._failed = false;
         this._willfail = false;
         this._fail = e => {
             this._failed = true;
-            electron.ipcRenderer.send("log", "note", "UpdateChecker: Could not fetch latest release from GitHub's API.");
-            electron.ipcRenderer.send("log", "debug", `Error: ${e}`);
+            window.electronAPI.send("log", "note", "UpdateChecker: Could not fetch latest release from GitHub's API.");
+            window.electronAPI.send("log", "debug", `Error: ${e}`);
         };
 
         https.get({
@@ -47,16 +49,16 @@ class UpdateChecker {
                     try {
                         let release = JSON.parse(d.toString());
                         if (release.tag_name.slice(1) === current) {
-                            electron.ipcRenderer.send("log", "info", "UpdateChecker: Running latest version.");
+                            window.electronAPI.send("log", "info", "UpdateChecker: Running latest version.");
                         } else if (Number(release.tag_name.slice(1).replace(/\./g, "")) < Number(current.replace("-pre", "").replace(/\./g, ""))) {
-                            electron.ipcRenderer.send("log", "info", "UpdateChecker: Running an unreleased, development version.");
+                            window.electronAPI.send("log", "info", "UpdateChecker: Running an unreleased, development version.");
                         } else {
                             new Modal({
                                 type: "info",
                                 title: "New version available",
-                                message: `eDEX-UI <strong>${release.tag_name}</strong> is now available.<br/>Head over to <a href="#" onclick="require('electron').shell.openExternal('${release.html_url}')">github.com</a> to download the latest version.`
+                                message: `eDEX-UI <strong>${release.tag_name}</strong> is now available.<br/>Head over to <a href="#" onclick="window.electronAPI.shellOpenExternal('${release.html_url}')">github.com</a> to download the latest version.`
                             });
-                            electron.ipcRenderer.send("log", "info", `UpdateChecker: New version ${release.tag_name} available.`);
+                            window.electronAPI.send("log", "info", `UpdateChecker: New version ${release.tag_name} available.`);
                         }
                     } catch(e) {
                         this._fail(e);

@@ -45,16 +45,27 @@ class Netstat {
         this.geoLookup = {
             get: () => null
         };
-        let geolite2 = require("geolite2-redist");
-        let maxmind = require("maxmind");
-        geolite2.downloadDbs(require("path").join(require("@electron/remote").app.getPath("userData"), "geoIPcache")).then(() => {
-           geolite2.open('GeoLite2-City', path => {
-                return maxmind.open(path);
-            }).catch(e => {throw e}).then(lookup => {
-                this.geoLookup = lookup;
-                this.lastconn.finished = true;
+        this.initGeoIP();
+    }
+    
+    async initGeoIP() {
+        try {
+            let geolite2 = require("geolite2-redist");
+            let maxmind = require("maxmind");
+            let path = require("path");
+            const userDataPath = await window.electronAPI.getUserDataPath();
+            geolite2.downloadDbs(path.join(userDataPath, "geoIPcache")).then(() => {
+                geolite2.open('GeoLite2-City', path => {
+                    return maxmind.open(path);
+                }).catch(e => {throw e}).then(lookup => {
+                    this.geoLookup = lookup;
+                    this.lastconn.finished = true;
+                });
             });
-        });
+        } catch (error) {
+            console.error('Failed to initialize GeoIP:', error);
+            this.lastconn.finished = true;
+        }
     }
     updateInfo() {
         window.si.networkInterfaces().then(async data => {
@@ -127,9 +138,8 @@ class Netstat {
                                 if (this.failedAttempts[e] > 2) return false;
                                 console.warn(e);
                                 console.info(rawData.toString());
-                                let electron = require("electron");
-                                electron.ipcRenderer.send("log", "note", "NetStat: Error parsing data from myexternalip.com");
-                                electron.ipcRenderer.send("log", "debug", `Error: ${e}`);
+                                window.electronAPI.send("log", "note", "NetStat: Error parsing data from myexternalip.com");
+                                window.electronAPI.send("log", "debug", `Error: ${e}`);
                             }
                         });
                     }).on("error", e => {

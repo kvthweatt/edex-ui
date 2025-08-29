@@ -603,6 +603,10 @@ app.on('ready', async () => {
         return await shell.openPath(path);
     });
 
+    ipcMain.handle('shell-open-external', async (event, url) => {
+        return await shell.openExternal(url);
+    });
+
     // App restart and quit
     ipcMain.handle('app-relaunch', () => {
         app.relaunch();
@@ -631,10 +635,11 @@ app.on('ready', async () => {
         return { success: true };
     });
 
-    // Web frame operations
+    // Web frame operations  
     ipcMain.handle('set-visual-zoom-limits', (event, min, max) => {
-        const { webFrame } = require('electron');
-        webFrame.setVisualZoomLevelLimits(min, max);
+        // This needs to be executed in the renderer process, not main
+        // We'll send it back to the renderer to execute
+        win.webContents.setVisualZoomLevelLimits(min, max);
         return { success: true };
     });
 });
