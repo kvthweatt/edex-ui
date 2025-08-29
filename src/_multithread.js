@@ -1,6 +1,6 @@
 const cluster = require("cluster");
 
-if (cluster.isMaster) {
+if (cluster.isPrimary) {
     const electron = require("electron");
     const ipc = electron.ipcMain;
     const signale = require("signale");

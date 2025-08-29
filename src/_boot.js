@@ -30,7 +30,6 @@ if (!gotLock) {
 signale.time("Startup");
 
 const electron = require("electron");
-require('@electron/remote/main').initialize()
 const ipc = electron.ipcMain;
 const path = require("path");
 const url = require("url");
@@ -40,6 +39,137 @@ const Terminal = require("./classes/terminal.class.js").Terminal;
 
 ipc.on("log", (e, type, content) => {
     signale[type](content);
+});
+
+// IPC handlers for preload script
+ipc.handle('get-app-version', () => app.getVersion());
+ipc.handle('get-user-data-path', () => electron.app.getPath('userData'));
+ipc.handle('get-command-line-args', () => process.argv);
+
+// Settings handlers
+ipc.handle('load-settings', async () => {
+    try {
+        return JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    } catch (error) {
+        signale.error('Failed to load settings:', error);
+        throw error;
+    }
+});
+
+ipc.handle('save-settings', async (event, settings) => {
+    try {
+        fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 4));
+        return true;
+    } catch (error) {
+        signale.error('Failed to save settings:', error);
+        throw error;
+    }
+});
+
+ipc.handle('load-shortcuts', async () => {
+    try {
+        return JSON.parse(fs.readFileSync(shortcutsFile, 'utf8'));
+    } catch (error) {
+        signale.error('Failed to load shortcuts:', error);
+        throw error;
+    }
+});
+
+ipc.handle('save-shortcuts', async (event, shortcuts) => {
+    try {
+        fs.writeFileSync(shortcutsFile, JSON.stringify(shortcuts, null, 4));
+        return true;
+    } catch (error) {
+        signale.error('Failed to save shortcuts:', error);
+        throw error;
+    }
+});
+
+ipc.handle('load-window-state', async () => {
+    try {
+        return JSON.parse(fs.readFileSync(lastWindowStateFile, 'utf8'));
+    } catch (error) {
+        signale.error('Failed to load window state:', error);
+        throw error;
+    }
+});
+
+ipc.handle('save-window-state', async (event, state) => {
+    try {
+        fs.writeFileSync(lastWindowStateFile, JSON.stringify(state, null, 4));
+        return true;
+    } catch (error) {
+        signale.error('Failed to save window state:', error);
+        throw error;
+    }
+});
+
+// Theme and keyboard layout handlers
+ipc.handle('load-theme', async (event, themeName) => {
+    try {
+        const themePath = path.join(themesDir, `${themeName}.json`);
+        return JSON.parse(fs.readFileSync(themePath, 'utf8'));
+    } catch (error) {
+        signale.error('Failed to load theme:', error);
+        throw error;
+    }
+});
+
+ipc.handle('load-keyboard-layout', async (event, layoutName) => {
+    try {
+        const layoutPath = path.join(kblayoutsDir, `${layoutName}.json`);
+        return JSON.parse(fs.readFileSync(layoutPath, 'utf8'));
+    } catch (error) {
+        signale.error('Failed to load keyboard layout:', error);
+        throw error;
+    }
+});
+
+// File system handlers (with security checks)
+ipc.handle('read-file', async (event, filePath) => {
+    try {
+        // Security check: only allow access to userData directory and subdirectories
+        const userDataPath = electron.app.getPath('userData');
+        const resolvedPath = path.resolve(filePath);
+        if (!resolvedPath.startsWith(userDataPath)) {
+            throw new Error('Access denied: File outside userData directory');
+        }
+        return fs.readFileSync(resolvedPath, 'utf8');
+    } catch (error) {
+        signale.error('Failed to read file:', error);
+        throw error;
+    }
+});
+
+ipc.handle('write-file', async (event, filePath, content) => {
+    try {
+        // Security check: only allow access to userData directory and subdirectories
+        const userDataPath = electron.app.getPath('userData');
+        const resolvedPath = path.resolve(filePath);
+        if (!resolvedPath.startsWith(userDataPath)) {
+            throw new Error('Access denied: File outside userData directory');
+        }
+        fs.writeFileSync(resolvedPath, content);
+        return true;
+    } catch (error) {
+        signale.error('Failed to write file:', error);
+        throw error;
+    }
+});
+
+ipc.handle('list-directory', async (event, dirPath) => {
+    try {
+        // Security check: only allow access to userData directory and subdirectories
+        const userDataPath = electron.app.getPath('userData');
+        const resolvedPath = path.resolve(dirPath);
+        if (!resolvedPath.startsWith(userDataPath)) {
+            throw new Error('Access denied: Directory outside userData directory');
+        }
+        return fs.readdirSync(resolvedPath);
+    } catch (error) {
+        signale.error('Failed to list directory:', error);
+        throw error;
+    }
 });
 
 var win, tty, extraTtys;
@@ -192,13 +322,15 @@ function createWindow(settings) {
         backgroundColor: '#000000',
         webPreferences: {
             devTools: true,
-	    enableRemoteModule: true,
-            contextIsolation: false,
-            backgroundThrottling: false,
-            webSecurity: true,
-            nodeIntegration: true,
+            contextIsolation: true,
+            nodeIntegration: false,
             nodeIntegrationInSubFrames: false,
+            enableRemoteModule: false,
+            sandbox: false, // We'll start with false and gradually enable
+            webSecurity: true,
             allowRunningInsecureContent: false,
+            backgroundThrottling: false,
+            preload: path.join(__dirname, 'preload.js'),
             experimentalFeatures: settings.experimentalFeatures || false
         }
     });

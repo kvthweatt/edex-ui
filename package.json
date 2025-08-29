@@ -36,6 +36,10 @@
   },
   "author": "Gabriel 'Squared' SAILLARD <gabriel@saillard.dev> (https://gaby.dev)",
   "license": "GPL-3.0",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
   "bugs": {
     "url": "https://github.com/GitSquared/edex-ui/issues"
   },
@@ -99,9 +103,10 @@
     }
   },
   "dependencies": {
+    "@electron/rebuild": "^4.0.1",
     "clean-css": "5.2.1",
-    "electron": "^12.1.0",
-    "electron-builder": "^22.14.5",
+    "electron": "^37.4.0",
+    "electron-builder": "^26.0.12",
     "electron-rebuild": "^2.3.5",
     "mime-types": "^2.1.33",
     "node-abi": "2.30.1",
