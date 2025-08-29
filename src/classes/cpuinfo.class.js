@@ -8,13 +8,46 @@ class Cpuinfo {
         </div>`;
         this.container = document.getElementById("mod_cpuinfo");
 
-        // Init Smoothie
-        let TimeSeries = require("smoothie").TimeSeries;
-        let SmoothieChart = require("smoothie").SmoothieChart;
-
         this.series = [];
         this.charts = [];
-        window.si.cpu().then(data => {
+        
+        // Check if Smoothie is available globally (it should be loaded via script tag)
+        if (typeof TimeSeries === 'undefined' || typeof SmoothieChart === 'undefined') {
+            console.warn('Smoothie charts library not available, using basic display');
+            this._initBasic();
+            return;
+        }
+        
+        this._initAsync();
+    }
+    
+    async _initBasic() {
+        try {
+            const platform = await window.electronAPI.getPlatform();
+            const data = await window.si.cpu();
+            
+            let cpuName = data.manufacturer + data.brand;
+            cpuName = cpuName.substr(0, 30);
+            
+            this.container.innerHTML = `<div>
+                <h1>CPU USAGE<i>${cpuName}</i></h1>
+                <div>
+                    <h1>CORES: ${data.cores}</h1>
+                    <h1>SPEED: ${data.speed}GHz</h1>
+                    <h1>MAX: ${data.speedMax}GHz</h1>
+                    <h2>Charts unavailable</h2>
+                </div>
+            </div>`;
+        } catch (error) {
+            console.error('Failed to initialize basic CPU info:', error);
+            this.container.innerHTML = '<div><h1>CPU USAGE</h1><h2>Unavailable</h2></div>';
+        }
+    }
+    
+    async _initAsync() {
+        try {
+            const platform = await window.electronAPI.getPlatform();
+            const data = await window.si.cpu();
             let divide = Math.floor(data.cores/2);
             this.divide = divide;
 
@@ -37,8 +70,8 @@ class Cpuinfo {
                 </div>
                 <div>
                     <div>
-                        <h1>${(process.platform === "win32") ? "CORES" : "TEMP"}<br>
-                        <i id="mod_cpuinfo_temp">${(process.platform === "win32") ? data.cores : "--°C"}</i></h1>
+                        <h1>${(platform === "win32") ? "CORES" : "TEMP"}<br>
+                        <i id="mod_cpuinfo_temp">${(platform === "win32") ? data.cores : "--°C"}</i></h1>
                     </div>
                     <div>
                         <h1>SPD<br>
@@ -96,10 +129,13 @@ class Cpuinfo {
                 this.charts[i].streamTo(document.getElementById(`mod_cpuinfo_canvas_${i}`), 500);
             }
 
+            // Store platform for later use
+            this.platform = platform;
+            
             // Init updater
             this.updatingCPUload = false;
             this.updateCPUload();
-            if (process.platform !== "win32") {this.updateCPUtemp();}
+            if (platform !== "win32") {this.updateCPUtemp();}
             this.updatingCPUspeed = false;
             this.updateCPUspeed();
             this.updatingCPUtasks = false;
@@ -107,7 +143,7 @@ class Cpuinfo {
             this.loadUpdater = setInterval(() => {
                 this.updateCPUload();
             }, 500);
-            if (process.platform !== "win32") {
+            if (platform !== "win32") {
                 this.tempUpdater = setInterval(() => {
                     this.updateCPUtemp();
                 }, 2000);

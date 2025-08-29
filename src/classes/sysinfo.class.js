@@ -2,21 +2,9 @@ class Sysinfo {
     constructor(parentId) {
         if (!parentId) throw "Missing parameters";
 
-        // See #255
-        let os;
-        switch (require("os").platform()) {
-            case "darwin":
-                os = "macOS";
-                break;
-            case "win32":
-                os = "win";
-                break;
-            default:
-                os = require("os").platform();
-        }
-
-        // Create DOM
         this.parent = document.getElementById(parentId);
+        
+        // Initialize with placeholder DOM
         this.parent.innerHTML += `<div id="mod_sysinfo">
             <div>
                 <h1>1970</h1>
@@ -28,7 +16,7 @@ class Sysinfo {
             </div>
             <div>
                 <h1>TYPE</h1>
-                <h2>${os}</h2>
+                <h2>Loading...</h2>
             </div>
             <div>
                 <h1>POWER</h1>
@@ -36,15 +24,45 @@ class Sysinfo {
             </div>
         </div>`;
 
-        this.updateDate();
-        this.updateUptime();
-        this.uptimeUpdater = setInterval(() => {
+        // Initialize asynchronously
+        this._initAsync();
+    }
+    
+    async _initAsync() {
+        try {
+            // Get OS platform via IPC
+            const platform = await window.electronAPI.getPlatform();
+            let osDisplay;
+            switch (platform) {
+                case "darwin":
+                    osDisplay = "macOS";
+                    break;
+                case "win32":
+                    osDisplay = "win";
+                    break;
+                default:
+                    osDisplay = platform;
+            }
+            
+            // Update OS display
+            document.querySelector("#mod_sysinfo > div:nth-child(3) > h2").innerHTML = osDisplay;
+            
+            // Start regular updates
+            this.updateDate();
             this.updateUptime();
-        }, 60000);
-        this.updateBattery();
-        this.batteryUpdater = setInterval(() => {
+            this.uptimeUpdater = setInterval(() => {
+                this.updateUptime();
+            }, 60000);
             this.updateBattery();
-        }, 3000);
+            this.batteryUpdater = setInterval(() => {
+                this.updateBattery();
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Failed to initialize Sysinfo:', error);
+            // Fallback to generic display
+            document.querySelector("#mod_sysinfo > div:nth-child(3) > h2").innerHTML = "system";
+        }
     }
     updateDate() {
         let time = new Date();
@@ -97,24 +115,32 @@ class Sysinfo {
             this.updateDate();
         }, timeToNewDay);
     }
-    updateUptime() {
-        let uptime = {
-            raw: Math.floor(require("os").uptime()),
-            days: 0,
-            hours: 0,
-            minutes: 0
-        };
+    async updateUptime() {
+        try {
+            // Use systeminformation proxy for uptime
+            const sysUptime = await window.si.time();
+            let uptime = {
+                raw: Math.floor(sysUptime.uptime || 0),
+                days: 0,
+                hours: 0,
+                minutes: 0
+            };
 
-        uptime.days = Math.floor(uptime.raw/86400);
-        uptime.raw -= uptime.days*86400;
-        uptime.hours = Math.floor(uptime.raw/3600);
-        uptime.raw -= uptime.hours*3600;
-        uptime.minutes = Math.floor(uptime.raw/60);
+            uptime.days = Math.floor(uptime.raw/86400);
+            uptime.raw -= uptime.days*86400;
+            uptime.hours = Math.floor(uptime.raw/3600);
+            uptime.raw -= uptime.hours*3600;
+            uptime.minutes = Math.floor(uptime.raw/60);
 
-        if (uptime.hours.toString().length !== 2) uptime.hours = "0"+uptime.hours;
-        if (uptime.minutes.toString().length !== 2) uptime.minutes = "0"+uptime.minutes;
+            if (uptime.hours.toString().length !== 2) uptime.hours = "0"+uptime.hours;
+            if (uptime.minutes.toString().length !== 2) uptime.minutes = "0"+uptime.minutes;
 
-        document.querySelector("#mod_sysinfo > div:nth-child(2) > h2").innerHTML = uptime.days + '<span style="opacity:0.5;">d</span>' + uptime.hours + '<span style="opacity:0.5;">:</span>' + uptime.minutes;
+            document.querySelector("#mod_sysinfo > div:nth-child(2) > h2").innerHTML = uptime.days + '<span style="opacity:0.5;">d</span>' + uptime.hours + '<span style="opacity:0.5;">:</span>' + uptime.minutes;
+        } catch (error) {
+            console.error('Failed to get uptime:', error);
+            // Fallback display
+            document.querySelector("#mod_sysinfo > div:nth-child(2) > h2").innerHTML = "0<span style=\"opacity:0.5;\">d</span>0<span style=\"opacity:0.5;\">:</span>0";
+        }
     }
     updateBattery() {
         window.si.battery().then(bat => {
