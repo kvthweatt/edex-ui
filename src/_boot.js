@@ -279,13 +279,13 @@ function createWindow(settings) {
     });
 
     win.loadURL(url.format({
-        pathname: path.join(__dirname, 'ui.html'),
+        pathname: path.join(__dirname, 'test_minimal.html'),
         protocol: 'file:',
         slashes: true
     }));
     
-    // Open DevTools by default for debugging
-    win.webContents.openDevTools();
+    // Temporarily disable DevTools auto-open
+    // win.webContents.openDevTools();
 
     signale.complete("Frontend window created!");
     win.show();

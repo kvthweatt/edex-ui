@@ -35,6 +35,19 @@
 
         <!-- Load dependency js -->
         <!-- <script src="node_modules/pdfjs-dist/build/pdf.mjs" type="module"></script> -->
+        
+        <!-- Module.exports shim for browser compatibility -->
+        <script>
+            // Create a simple module.exports shim for browser context
+            if (typeof module === 'undefined') {
+                window.module = {};
+            }
+            if (typeof module.exports === 'undefined') {
+                module.exports = {};
+            }
+            console.log('[UI] Module.exports shim loaded');
+        </script>
+        
         <!-- Load main modules classes -->
         <script src="classes/modal.class.js"></script>
         <script src="classes/terminal.class.js"></script>
@@ -56,6 +69,9 @@
         <script src="classes/fuzzyFinder.class.js"></script>
         <!-- Load extra classes -->
         <script src="classes/audiofx.class.js"></script>
+        
+        <!-- Load Howler for audio management -->
+        <script src="node_modules/howler/dist/howler.core.min.js"></script>
     </head>
     <body class="solidBackground">
         <section id="boot_screen">

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>eDEX-UI Class Test</title>
+        <style>
+            body {
+                background: black;
+                color: #00ff00;
+                font-family: monospace;
+                padding: 20px;
+                font-size: 16px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="log">
+            <h1>eDEX-UI Class Loading Test</h1>
+            <p>Starting class loading test...</p>
+        </div>
+
+        <script>
+            function log(message) {
+                const logDiv = document.getElementById('log');
+                logDiv.innerHTML += `<p>${new Date().toISOString()}: ${message}</p>`;
+                console.log(message);
+            }
+
+            window.addEventListener('error', (event) => {
+                log(`ERROR: ${event.error.message} at ${event.filename}:${event.lineno}:${event.colno}`);
+                log(`Stack: ${event.error.stack}`);
+            });
+
+            window.addEventListener('unhandledrejection', (event) => {
+                log(`PROMISE ERROR: ${event.reason}`);
+            });
+
+            log("JavaScript engine working");
+            log("Starting class tests...");
+        </script>
+
+        <!-- Test each class file one by one -->
+        <script>
+            log("Loading modal.class.js...");
+        </script>
+        <script src="classes/modal.class.js"></script>
+        
+        <script>
+            log("Modal class loaded successfully");
+            log("Loading audiofx.class.js...");
+        </script>
+        <script src="classes/audiofx.class.js"></script>
+        
+        <script>
+            log("Audiofx class loaded successfully");
+            log("Loading terminal.class.js...");
+        </script>
+        <script src="classes/terminal.class.js"></script>
+        
+        <script>
+            log("Terminal class loaded successfully");
+            log("Loading filesystem.class.js...");
+        </script>
+        <script src="classes/filesystem.class.js"></script>
+        
+        <script>
+            log("Filesystem class loaded successfully");
+            log("Loading keyboard.class.js...");
+        </script>
+        <script src="classes/keyboard.class.js"></script>
+        
+        <script>
+            log("Keyboard class loaded successfully");
+            log("Loading updateChecker.class.js...");
+        </script>
+        <script src="classes/updateChecker.class.js"></script>
+        
+        <script>
+            log("UpdateChecker class loaded successfully");
+            log("Loading netstat.class.js...");
+        </script>
+        <script src="classes/netstat.class.js"></script>
+        
+        <script>
+            log("Netstat class loaded successfully");
+            log("All main classes loaded - renderer should work now!");
+            log("If you see this message, the issue is likely in a secondary class or the renderer itself.");
+        </script>
+
+    </body>
+</html>

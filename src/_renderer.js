@@ -1,6 +1,23 @@
 // Immediate test to verify renderer is loading
 console.log("[RENDERER] Script started loading");
 
+// Enhanced error handling to catch silent failures
+window.addEventListener('error', (event) => {
+    console.error('[RENDERER ERROR]', event.error);
+    const bootScreen = document.getElementById("boot_screen");
+    if (bootScreen) {
+        bootScreen.innerHTML += `<br/>ERROR: ${event.error.message}<br/>at ${event.filename}:${event.lineno}:${event.colno}`;
+    }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('[RENDERER UNHANDLED PROMISE]', event.reason);
+    const bootScreen = document.getElementById("boot_screen");
+    if (bootScreen) {
+        bootScreen.innerHTML += `<br/>PROMISE ERROR: ${event.reason}`;
+    }
+});
+
 // Wait for DOM to be ready before accessing elements
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
@@ -259,24 +276,46 @@ function initSystemInformationProxy() {
     });
 }
 
-// Init audio
-window.audioManager = new AudioManager();
+// Init audio with error handling
+try {
+    console.log('[RENDERER] Initializing AudioManager...');
+    window.audioManager = new AudioManager();
+    console.log('[RENDERER] AudioManager initialized successfully');
+} catch (error) {
+    console.error('[RENDERER] Failed to initialize AudioManager:', error);
+    const bootScreen = document.getElementById("boot_screen");
+    if (bootScreen) {
+        bootScreen.innerHTML += `<br/>AUDIO ERROR: ${error.message}`;
+    }
+    // Create a no-op audio manager
+    window.audioManager = new Proxy({}, {
+        get: () => ({ play: () => true })
+    });
+}
 
 // Initialize paths, load config, and start app
 async function startApp() {
     // Add debugging info
     console.log('Starting eDEX-UI renderer...');
-    document.getElementById("boot_screen").innerHTML = "Starting eDEX-UI renderer...<br/>";
+    const bootScreen = document.getElementById("boot_screen");
+    if (bootScreen) {
+        bootScreen.innerHTML = "[RENDERER DEBUG] Starting eDEX-UI renderer...<br/>";
+        bootScreen.style.color = "#00ff00";
+        bootScreen.style.fontFamily = "monospace";
+        bootScreen.style.fontSize = "16px";
+        bootScreen.style.padding = "20px";
+    }
     
     try {
-        document.getElementById("boot_screen").innerHTML += "Loading configuration...<br/>";
+        if (bootScreen) bootScreen.innerHTML += "[RENDERER DEBUG] Loading configuration...<br/>";
         await initializeConfig();
-        document.getElementById("boot_screen").innerHTML += "Loading CLI parameters...<br/>";
+        if (bootScreen) bootScreen.innerHTML += "[RENDERER DEBUG] Loading CLI parameters...<br/>";
         await loadCLIParameters();
+        if (bootScreen) bootScreen.innerHTML += "[RENDERER DEBUG] Configuration loaded successfully!<br/>";
     } catch (error) {
         console.error('Failed to initialize:', error);
         // Show error on boot screen
-        document.getElementById("boot_screen").innerHTML += `<br/>ERROR: ${error.message}`;
+        if (bootScreen) bootScreen.innerHTML += `<br/>[RENDERER ERROR] ${error.message}<br/>[RENDERER ERROR] Stack: ${error.stack}`;
         return;
     }
     

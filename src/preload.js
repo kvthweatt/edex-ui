@@ -135,5 +135,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   globalShortcutUnregisterAll: () => ipcRenderer.invoke('global-shortcut-unregister-all'),
   
   // Web frame operations
-  setVisualZoomLimits: (min, max) => ipcRenderer.invoke('set-visual-zoom-limits', min, max)
+  setVisualZoomLimits: (min, max) => ipcRenderer.invoke('set-visual-zoom-limits', min, max),
+  
+  // Renderer utilities (replacement for Node.js modules in renderer)
+  pathJoin: (...parts) => {
+    // Simple path joining implementation for renderer
+    return parts.join('/').replace(/\/+/g, '/').replace(/\\/g, '/');
+  },
+  
+  // Generate asset URLs for the renderer
+  resolveAssetPath: (relativePath) => {
+    // Use file:// protocol for local asset paths
+    const basePath = window.location.pathname.replace('/ui.html', '');
+    return `file://${basePath}/assets/${relativePath}`;
+  },
+  
+  // Simple nanoid implementation for renderer (avoids require)
+  nanoid: (size = 21) => {
+    const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    let id = '';
+    for (let i = 0; i < size; i++) {
+      id += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    return id;
+  }
 });
