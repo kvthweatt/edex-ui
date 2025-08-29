@@ -3,84 +3,28 @@ class Terminal {
         console.log('[TERMINAL] Constructor called with opts:', opts);
         
         if (opts.role === "client") {
-            console.log('[TERMINAL] Client mode - checking dependencies');
+            console.log('[TERMINAL] Client mode - using TerminalBridge');
             if (!opts.parentId) throw "Missing options";
 
-            // Try multiple sources for XTerm Terminal class, including factory approach
-            this.xTerm = window.XTerminal || 
-                        (window.XTermFactory && window.XTermFactory.Terminal) ||
-                        (window.XTermClasses && window.XTermClasses.Terminal) || 
-                        window.Terminal;
-            
-            // Enhanced fallback detection with direct assignment
-            if (!this.xTerm && window.Terminal) {
-                this.xTerm = window.Terminal;
+            // Check for TerminalBridge availability
+            if (!window.terminalBridge) {
+                console.error('[TERMINAL] TerminalBridge not available! Check preload.js.');
+                throw new Error('TerminalBridge not available - secure terminal backend required');
             }
             
-            // If we still don't have it, try to use factory function directly
-            if (!this.xTerm && window.createTerminal) {
-                console.log('[TERMINAL] Using factory function approach instead of constructor');
-                this.useFactoryPattern = true;
-            }
-            
-            // Ensure we have the actual constructor function, not a wrapped reference
-            if (this.xTerm && typeof this.xTerm === 'function') {
-                // Test if it's a proper constructor
-                try {
-                    // This should not throw for a proper constructor
-                    const TestClass = this.xTerm;
-                    if (TestClass.prototype && TestClass.prototype.constructor === TestClass) {
-                        console.log('[TERMINAL] XTerm constructor validated successfully');
-                    }
-                } catch (error) {
-                    console.warn('[TERMINAL] XTerm constructor validation failed:', error);
-                }
-            }
-            
-            // Load addon classes with fallbacks
-            const AttachAddon = window.AttachAddon || (window.XTermClasses && window.XTermClasses.AttachAddon);
-            const FitAddon = window.FitAddon || (window.XTermClasses && window.XTermClasses.FitAddon);
-            const LigaturesAddon = window.LigaturesAddon || (window.XTermClasses && window.XTermClasses.LigaturesAddon);
-            const WebglAddon = window.WebglAddon || (window.XTermClasses && window.XTermClasses.WebglAddon);
             this.Ipc = window.electronAPI;
-            
-            console.log('[TERMINAL] Dependencies loaded:', {
-                xTerm: typeof this.xTerm,
-                AttachAddon: typeof AttachAddon,
-                FitAddon: typeof FitAddon, 
-                LigaturesAddon: typeof LigaturesAddon,
-                WebglAddon: typeof WebglAddon,
-                Ipc: typeof this.Ipc
-            });
-            
-            // Debug the exact XTerm class we received
-            console.log('[TERMINAL] XTerm class details:', {
-                name: this.xTerm?.name,
-                prototype: !!this.xTerm?.prototype,
-                constructor: !!this.xTerm?.prototype?.constructor,
-                toString: this.xTerm?.toString().substring(0, 100)
-            });
-            
-            // Try to inspect the actual function
-            if (this.xTerm) {
-                console.log('[TERMINAL] XTerm function source (first 200 chars):', this.xTerm.toString().substring(0, 200));
-            }
-            
-            if (!this.xTerm) {
-                console.error('[TERMINAL] XTerminal class not available!');
-                console.error('[TERMINAL] Available globals containing "Term":', Object.keys(window).filter(k => k.toLowerCase().includes('term')));
-                console.error('[TERMINAL] Available XTermClasses:', window.XTermClasses ? Object.keys(window.XTermClasses) : 'undefined');
-                console.error('[TERMINAL] Window object keys (sample):', Object.keys(window).slice(0, 20));
-                throw new Error('XTerminal class not available - check that XTerm is properly loaded');
-            }
+            console.log('[TERMINAL] TerminalBridge and IPC loaded successfully');
 
             this.port = opts.port || 3000;
             this.cwd = "";
             this.oncwdchange = () => {};
 
             this._sendSizeToServer = () => {
-                let cols = this.term.cols.toString();
-                let rows = this.term.rows.toString();
+                const dimensions = window.terminalBridge.getDimensions(this.id);
+                if (!dimensions) return;
+                
+                let cols = dimensions.cols.toString();
+                let rows = dimensions.rows.toString();
                 while (cols.length < 3) {
                     cols = "0"+cols;
                 }
@@ -202,38 +146,39 @@ class Terminal {
                 }
             };
 
-            // Create XTerm instance using factory function if available, otherwise use constructor
-            if (window.createTerminal && typeof window.createTerminal === 'function') {
-                console.log('[TERMINAL] Using factory function to create XTerm instance');
-                this.term = window.createTerminal(terminalConfig);
-            } else {
-                console.log('[TERMINAL] Using constructor to create XTerm instance');
-                const XTerminalClass = this.xTerm;
-                console.log('[TERMINAL] About to instantiate XTerm with class:', XTerminalClass?.name || 'unnamed');
-                this.term = new XTerminalClass(terminalConfig);
-            }
+            // Generate unique terminal ID and create terminal via bridge
+            this.id = window.electronAPI.nanoid();
+            console.log('[TERMINAL] Creating terminal via TerminalBridge with ID:', this.id);
             
-            console.log('[TERMINAL] About to create FitAddon, type:', typeof FitAddon);
-            try {
-                let fitAddon = new FitAddon();
-                console.log('[TERMINAL] FitAddon created successfully');
-                this.term.loadAddon(fitAddon);
-                console.log('[TERMINAL] FitAddon loaded successfully');
-            } catch (error) {
-                console.error('[TERMINAL] Error creating/loading FitAddon:', error);
-                throw error;
+            // Create terminal through secure bridge
+            const success = window.terminalBridge.create(this.id, '#' + opts.parentId, terminalConfig);
+            if (!success) {
+                throw new Error('Failed to create terminal via TerminalBridge');
             }
-            this.term.open(document.getElementById(opts.parentId));
-            this.term.loadAddon(new WebglAddon());
-            let ligaturesAddon = new LigaturesAddon();
-            this.term.loadAddon(ligaturesAddon);
-            this.term.attachCustomKeyEventHandler(e => {
-                window.keyboard.keydownHandler(e);
-                return true;
-            });
-            // Prevent soft-keyboard on touch devices #733
-            document.querySelectorAll('.xterm-helper-textarea').forEach(textarea => textarea.setAttribute('readonly', 'readonly'))
-            this.term.focus();
+            console.log('[TERMINAL] Terminal created successfully via TerminalBridge');
+            
+            // Set up custom key event handler after terminal is ready
+            setTimeout(() => {
+                // Find the textarea and set up key handler
+                const textArea = document.querySelector('.xterm-helper-textarea');
+                if (textArea) {
+                    textArea.addEventListener('keydown', e => {
+                        window.keyboard.keydownHandler(e);
+                    });
+                    // Prevent soft-keyboard on touch devices #733
+                    textArea.setAttribute('readonly', 'readonly');
+                    
+                    // Set up F11 handler
+                    textArea.addEventListener("keydown", e => {
+                        if (e.key === "F11" && window.settings.allowWindowed) {
+                            e.preventDefault();
+                            window.toggleFullScreen();
+                        }
+                    });
+                } else {
+                    console.warn('[TERMINAL] Could not find xterm textarea for key handler setup');
+                }
+            }, 100);
 
             this.Ipc.send("terminal_channel-"+this.port, "Renderer startup");
             this.Ipc.on("terminal_channel-"+this.port, (e, ...args) => {
@@ -264,8 +209,8 @@ class Terminal {
 
             this.socket = new WebSocket("ws://"+sockHost+":"+sockPort);
             this.socket.onopen = () => {
-                let attachAddon = new AttachAddon(this.socket);
-                this.term.loadAddon(attachAddon);
+                // Attach WebSocket through bridge
+                window.terminalBridge.attachWebSocket(this.id, this.socket);
                 this.fit();
             };
             this.socket.onerror = e => {throw JSON.stringify(e)};
@@ -301,7 +246,7 @@ class Terminal {
 
             let parent = document.getElementById(opts.parentId);
             parent.addEventListener("wheel", e => {
-                this.term.scrollLines(Math.round(e.deltaY/10));
+                window.terminalBridge.scrollLines(this.id, Math.round(e.deltaY/10));
             });
             this._lastTouchY = null;
             parent.addEventListener("touchstart", e => {
@@ -312,7 +257,7 @@ class Terminal {
                     let y = e.changedTouches[0].screenY;
                     let deltaY = y - this._lastTouchY;
                     this._lastTouchY = y;
-                    this.term.scrollLines(-Math.round(deltaY/10));
+                    window.terminalBridge.scrollLines(this.id, -Math.round(deltaY/10));
                 }
             });
             parent.addEventListener("touchend", e => {
@@ -322,16 +267,14 @@ class Terminal {
                 this._lastTouch = null;
             });
 
-            document.querySelector(".xterm-helper-textarea").addEventListener("keydown", e => {
-                if (e.key === "F11" && window.settings.allowWindowed) {
-                    e.preventDefault();
-                    window.toggleFullScreen();
-                }
-            });
+            // F11 handler is set up in the timeout handler above after terminal is ready
 
             this.fit = () => {
                 this.lastRefit = Date.now();
-                let {cols, rows} = fitAddon.proposeDimensions();
+                const fitResult = window.terminalBridge.fit(this.id);
+                if (!fitResult) return;
+                
+                let {cols, rows} = fitResult;
 
                 // Apply custom fixes based on screen ratio, see #302
                 let w = screen.width;
@@ -353,13 +296,14 @@ class Terminal {
                 cols = cols+x;
                 rows = rows+y;
 
-                if (this.term.cols !== cols || this.term.rows !== rows) {
+                const currentDimensions = window.terminalBridge.getDimensions(this.id);
+                if (!currentDimensions || currentDimensions.cols !== cols || currentDimensions.rows !== rows) {
                     this.resize(cols, rows);
                 }
             };
 
             this.resize = (cols, rows) => {
-                this.term.resize(cols, rows);
+                window.terminalBridge.resize(this.id, cols, rows);
                 this._sendSizeToServer();
             };
 
@@ -373,9 +317,9 @@ class Terminal {
 
             this.clipboard = {
                 copy: () => {
-                    if (!this.term.hasSelection()) return false;
+                    if (!window.terminalBridge.hasSelection(this.id)) return false;
                     document.execCommand("copy");
-                    this.term.clearSelection();
+                    window.terminalBridge.clearSelection(this.id);
                     this.clipboard.didCopy = true;
                 },
                 paste: async () => {

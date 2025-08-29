@@ -103,64 +103,13 @@
             console.log('[UI] Require and module shims loaded');
         </script>
         
-        <!-- Load XTerm classes using factory functions to avoid contextBridge issues -->
+        <!-- XTerm is now handled through secure TerminalBridge in preload context -->
         <script>
-            console.log('[UI] Loading XTerm classes from factory...');
-            
-            if (typeof window.XTermFactory !== 'undefined') {
-                try {
-                    console.log('[UI] XTermFactory available:', Object.keys(window.XTermFactory));
-                    
-                    // Expose XTerm classes globally using the factory approach
-                    window.XTerminal = window.XTermFactory.Terminal;
-                    window.xTerm = window.XTermFactory.Terminal;
-                    window.FitAddon = window.XTermFactory.FitAddon;
-                    window.AttachAddon = window.XTermFactory.AttachAddon;
-                    window.LigaturesAddon = window.XTermFactory.LigaturesAddon;
-                    window.WebglAddon = window.XTermFactory.WebglAddon;
-                    
-                    // Also expose the factory functions for direct use
-                    window.createTerminal = window.XTermFactory.createTerminal;
-                    window.createFitAddon = window.XTermFactory.createFitAddon;
-                    window.createAttachAddon = window.XTermFactory.createAttachAddon;
-                    window.createLigaturesAddon = window.XTermFactory.createLigaturesAddon;
-                    window.createWebglAddon = window.XTermFactory.createWebglAddon;
-                    
-                    console.log('[UI] XTerm classes loaded successfully from factory');
-                    console.log('[UI] XTerminal available:', typeof window.XTerminal);
-                    console.log('[UI] FitAddon available:', typeof window.FitAddon);
-                    console.log('[UI] AttachAddon available:', typeof window.AttachAddon);
-                    console.log('[UI] LigaturesAddon available:', typeof window.LigaturesAddon);
-                    console.log('[UI] WebglAddon available:', typeof window.WebglAddon);
-                    
-                    // Test XTerm class instantiation using factory function
-                    try {
-                        console.log('[UI] Testing XTerm instantiation using factory...');
-                        const testTerminal = window.createTerminal();
-                        console.log('[UI] XTerm factory instantiation test SUCCESS:', typeof testTerminal);
-                        testTerminal.dispose?.(); // Clean up if possible
-                    } catch (error) {
-                        console.error('[UI] XTerm factory instantiation test FAILED:', error);
-                        console.error('[UI] Error details:', error.stack);
-                    }
-                    
-                    // Test direct constructor instantiation
-                    try {
-                        console.log('[UI] Testing XTerm instantiation using constructor...');
-                        const testTerminal2 = new window.XTerminal();
-                        console.log('[UI] XTerm constructor instantiation test SUCCESS:', typeof testTerminal2);
-                        testTerminal2.dispose?.(); // Clean up if possible
-                    } catch (error) {
-                        console.error('[UI] XTerm constructor instantiation test FAILED:', error);
-                        console.error('[UI] Error details:', error.stack);
-                    }
-                } catch (error) {
-                    console.error('[UI] Failed to load XTerm classes from factory:', error);
-                    console.error('[UI] Error details:', error.stack);
-                }
+            console.log('[UI] Terminal functionality handled through TerminalBridge');
+            if (typeof window.terminalBridge !== 'undefined') {
+                console.log('[UI] TerminalBridge available and ready');
             } else {
-                console.error('[UI] XTermFactory not available from preload!');
-                console.log('[UI] Available preload objects:', Object.keys(window).filter(k => k.includes('XTerm')));
+                console.error('[UI] TerminalBridge not available - terminal functionality disabled');
             }
         </script>
         

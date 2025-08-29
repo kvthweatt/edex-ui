@@ -1,43 +1,44 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const path = require('path');
 
-// Load XTerm classes and expose them as factory functions to avoid contextBridge serialization issues
+// Load TerminalBridge to handle XTerm instances in preload context
 try {
-  const { Terminal } = require(path.join(__dirname, 'node_modules', '@xterm', 'xterm'));
-  const { FitAddon } = require(path.join(__dirname, 'node_modules', '@xterm', 'addon-fit'));
-  const { AttachAddon } = require(path.join(__dirname, 'node_modules', '@xterm', 'addon-attach'));
-  const { LigaturesAddon } = require(path.join(__dirname, 'node_modules', '@xterm', 'addon-ligatures'));
-  const { WebglAddon } = require(path.join(__dirname, 'node_modules', '@xterm', 'addon-webgl'));
+  const TerminalBridge = require('./preload/terminalBridge.js');
+  const terminalBridge = new TerminalBridge();
   
-  // Expose XTerm classes as factory functions to avoid class serialization issues
-  contextBridge.exposeInMainWorld('XTermFactory', {
-    createTerminal: (options) => new Terminal(options),
-    createFitAddon: () => new FitAddon(),
-    createAttachAddon: (socket) => new AttachAddon(socket),
-    createLigaturesAddon: () => new LigaturesAddon(),
-    createWebglAddon: () => new WebglAddon(),
-    // Also expose the class constructors as functions that return new instances
-    Terminal: Terminal,
-    FitAddon: FitAddon,
-    AttachAddon: AttachAddon,
-    LigaturesAddon: LigaturesAddon,
-    WebglAddon: WebglAddon
+  // Expose terminal bridge with serializable API
+  contextBridge.exposeInMainWorld('terminalBridge', {
+    create: (id, parentSelector, options) => terminalBridge.create(id, parentSelector, options),
+    write: (id, data) => terminalBridge.write(id, data),
+    resize: (id, cols, rows) => terminalBridge.resize(id, cols, rows),
+    fit: (id) => terminalBridge.fit(id),
+    focus: (id) => terminalBridge.focus(id),
+    getDimensions: (id) => terminalBridge.getDimensions(id),
+    scrollLines: (id, amount) => terminalBridge.scrollLines(id, amount),
+    attachWebSocket: (id, websocket) => terminalBridge.attachWebSocket(id, websocket),
+    on: (id, event, callback) => terminalBridge.on(id, event, callback),
+    off: (id, event, callback) => terminalBridge.off(id, event, callback),
+    hasSelection: (id) => terminalBridge.hasSelection(id),
+    clearSelection: (id) => terminalBridge.clearSelection(id),
+    dispose: (id) => terminalBridge.dispose(id)
   });
   
-  console.log('[PRELOAD] XTerm factory functions loaded successfully');
+  console.log('[PRELOAD] TerminalBridge loaded successfully');
 } catch (error) {
-  console.error('[PRELOAD] Failed to load XTerm classes:', error);
-  contextBridge.exposeInMainWorld('XTermFactory', {
-    createTerminal: () => { throw new Error('XTerm not available'); },
-    createFitAddon: () => { throw new Error('FitAddon not available'); },
-    createAttachAddon: () => { throw new Error('AttachAddon not available'); },
-    createLigaturesAddon: () => { throw new Error('LigaturesAddon not available'); },
-    createWebglAddon: () => { throw new Error('WebglAddon not available'); },
-    Terminal: null,
-    FitAddon: null,
-    AttachAddon: null,
-    LigaturesAddon: null,
-    WebglAddon: null
+  console.error('[PRELOAD] Failed to load TerminalBridge:', error);
+  // Provide fallback that throws meaningful errors
+  contextBridge.exposeInMainWorld('terminalBridge', {
+    create: () => { throw new Error('TerminalBridge not available'); },
+    write: () => { throw new Error('TerminalBridge not available'); },
+    resize: () => { throw new Error('TerminalBridge not available'); },
+    fit: () => { throw new Error('TerminalBridge not available'); },
+    focus: () => { throw new Error('TerminalBridge not available'); },
+    getDimensions: () => { throw new Error('TerminalBridge not available'); },
+    scrollLines: () => { throw new Error('TerminalBridge not available'); },
+    attachWebSocket: () => { throw new Error('TerminalBridge not available'); },
+    on: () => { throw new Error('TerminalBridge not available'); },
+    off: () => { throw new Error('TerminalBridge not available'); },
+    dispose: () => { throw new Error('TerminalBridge not available'); }
   });
 }
 
