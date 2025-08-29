@@ -3,11 +3,11 @@ class Terminal {
         if (opts.role === "client") {
             if (!opts.parentId) throw "Missing options";
 
-            this.xTerm = require("xterm").Terminal;
-            const {AttachAddon} = require("xterm-addon-attach");
-            const {FitAddon} = require("xterm-addon-fit");
-            const {LigaturesAddon} = require("xterm-addon-ligatures");
-            const {WebglAddon} = require("xterm-addon-webgl");
+            this.xTerm = require("@xterm/xterm").Terminal;
+            const {AttachAddon} = require("@xterm/addon-attach");
+            const {FitAddon} = require("@xterm/addon-fit");
+            const {LigaturesAddon} = require("@xterm/addon-ligatures");
+            const {WebglAddon} = require("@xterm/addon-webgl");
             this.Ipc = require("electron").ipcRenderer;
 
             this.port = opts.port || 3000;
@@ -292,8 +292,14 @@ class Terminal {
                     this.term.clearSelection();
                     this.clipboard.didCopy = true;
                 },
-                paste: () => {
-                    this.write(remote.clipboard.readText());
+                paste: async () => {
+                    try {
+                        const text = await navigator.clipboard.readText();
+                        this.write(text);
+                    } catch (err) {
+                        // Fallback for browsers that don't support clipboard API
+                        console.warn('Clipboard read failed:', err);
+                    }
                     this.clipboard.didCopy = false;
                 },
                 didCopy: false

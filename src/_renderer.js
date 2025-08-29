@@ -34,56 +34,84 @@ window.onerror = (msg, path, line, col, error) => {
     document.getElementById("boot_screen").innerHTML += `${error} :  ${msg}<br/>==> at ${path}  ${line}:${col}`;
 };
 
-const path = require("path");
-const fs = require("fs");
-const electron = require("electron");
-const remote = require("@electron/remote");
-const ipc = electron.ipcRenderer;
+// Initialize directories and file paths (will be set asynchronously)
+let settingsDir, themesDir, keyboardsDir, fontsDir;
+let settingsFile, shortcutsFile, lastWindowStateFile;
 
-const settingsDir = remote.app.getPath("userData");
-const themesDir = path.join(settingsDir, "themes");
-const keyboardsDir = path.join(settingsDir, "keyboards");
-const fontsDir = path.join(settingsDir, "fonts");
-const settingsFile = path.join(settingsDir, "settings.json");
-const shortcutsFile = path.join(settingsDir, "shortcuts.json");
-const lastWindowStateFile = path.join(settingsDir, "lastWindowState.json");
+// Helper function to join paths (replacing path.join)
+const joinPath = (...parts) => parts.join('/').replace(/\/+/g, '/').replace(/\\/g, '/');
 
-// Load config
-window.settings = require(settingsFile);
-window.shortcuts = require(shortcutsFile);
-window.lastWindowState = require(lastWindowStateFile);
+// Load config asynchronously
+window.settings = {};
+window.shortcuts = {};
+window.lastWindowState = {};
 
-// Load CLI parameters
-if (remote.process.argv.includes("--nointro")) {
-    window.settings.nointroOverride = true;
-} else {
-    window.settings.nointroOverride = false;
+// Initialize paths and load configuration
+async function initializeConfig() {
+    try {
+        settingsDir = await window.electronAPI.getUserDataPath();
+        themesDir = joinPath(settingsDir, 'themes');
+        keyboardsDir = joinPath(settingsDir, 'keyboards');
+        fontsDir = joinPath(settingsDir, 'fonts');
+        
+        // Load configuration files
+        window.settings = await window.electronAPI.loadSettings();
+        window.shortcuts = await window.electronAPI.loadShortcuts();
+        window.lastWindowState = await window.electronAPI.loadWindowState();
+        
+        return true;
+    } catch (error) {
+        console.error('Failed to initialize config:', error);
+        throw error;
+    }
 }
-if (electron.remote.process.argv.includes("--nocursor")) {
-    window.settings.nocursorOverride = true;
-} else {
-    window.settings.nocursorOverride = false;
+
+// Load CLI parameters and configuration asynchronously
+async function loadCLIParameters() {
+    try {
+        const argv = await window.electronAPI.getCommandLineArgs();
+        
+        if (argv.includes("--nointro")) {
+            window.settings.nointroOverride = true;
+        } else {
+            window.settings.nointroOverride = false;
+        }
+        if (argv.includes("--nocursor")) {
+            window.settings.nocursorOverride = true;
+        } else {
+            window.settings.nocursorOverride = false;
+        }
+    } catch (error) {
+        console.error('Failed to load CLI parameters:', error);
+    }
 }
 
 // Retrieve theme override (hotswitch)
-ipc.once("getThemeOverride", (e, theme) => {
-    if (theme !== null) {
-        window.settings.theme = theme;
-        window.settings.nointroOverride = true;
-        _loadTheme(require(path.join(themesDir, window.settings.theme+".json")));
-    } else {
-        _loadTheme(require(path.join(themesDir, window.settings.theme+".json")));
+window.electronAPI.receive("getThemeOverride", async (theme) => {
+    try {
+        if (theme !== null) {
+            window.settings.theme = theme;
+            window.settings.nointroOverride = true;
+            const themeData = await window.electronAPI.loadTheme(window.settings.theme);
+            _loadTheme(themeData);
+        } else {
+            const themeData = await window.electronAPI.loadTheme(window.settings.theme);
+            _loadTheme(themeData);
+        }
+    } catch (error) {
+        console.error('Failed to load theme:', error);
     }
 });
-ipc.send("getThemeOverride");
+window.electronAPI.send("getThemeOverride");
+
 // Same for keyboard override/hotswitch
-ipc.once("getKbOverride", (e, layout) => {
+window.electronAPI.receive("getKbOverride", (layout) => {
     if (layout !== null) {
         window.settings.keyboard = layout;
         window.settings.nointroOverride = true;
     }
 });
-ipc.send("getKbOverride");
+window.electronAPI.send("getKbOverride");
 
 // Load UI theme
 window._loadTheme = theme => {
