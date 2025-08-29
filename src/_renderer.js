@@ -264,14 +264,32 @@ async function startApp() {
 startApp();
 
 // Startup boot log
-function displayLine() {
+async function displayLine() {
     let bootScreen = document.getElementById("boot_screen");
-    let log = fs.readFileSync(path.join(__dirname, "assets", "misc", "boot_log.txt")).toString().split('\n');
+    let log, appVersion, platform;
+    
+    try {
+        // Load boot log and system info asynchronously
+        const assetsPath = joinPath(settingsDir, '..', '..', '..', 'assets', 'misc', 'boot_log.txt');
+        log = (await window.electronAPI.readFileSync(assetsPath)).split('\n');
+        appVersion = await window.electronAPI.getAppVersion();
+        platform = await window.electronAPI.getPlatform();
+    } catch (error) {
+        console.error('Failed to load boot assets:', error);
+        // Fallback to basic boot sequence
+        log = ['Boot starting...', 'Boot Complete'];
+        appVersion = 'Unknown';
+        platform = 'unknown';
+    }
 
-    function isArchUser() {
-        return require("os").platform() === "linux"
-                && fs.existsSync("/etc/os-release")
-                && fs.readFileSync("/etc/os-release").toString().includes("arch");
+    async function isArchUser() {
+        if (platform !== "linux") return false;
+        try {
+            return (await window.electronAPI.fileExists("/etc/os-release")) &&
+                   (await window.electronAPI.readFileSync("/etc/os-release")).includes("arch");
+        } catch (e) {
+            return false;
+        }
     }
 
     if (typeof log[i] === "undefined") {
@@ -289,7 +307,7 @@ function displayLine() {
 
     switch(true) {
         case i === 2:
-            bootScreen.innerHTML += `eDEX-UI Kernel version ${electron.remote.app.getVersion()} boot at ${Date().toString()}; root:xnu-1699.22.73~1/RELEASE_X86_64`;
+            bootScreen.innerHTML += `eDEX-UI Kernel version ${appVersion} boot at ${Date().toString()}; root:xnu-1699.22.73~1/RELEASE_X86_64`;
         case i === 4:
             setTimeout(displayLine, 500);
             break;
@@ -306,7 +324,7 @@ function displayLine() {
             setTimeout(displayLine, 25);
             break;
         case i === 83:
-            if (isArchUser())
+            if (await isArchUser())
                 bootScreen.innerHTML += "btw i use arch<br/>";
             setTimeout(displayLine, 25);
             break;

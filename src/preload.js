@@ -61,5 +61,47 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   removeAllListeners: (channel) => {
     ipcRenderer.removeAllListeners(channel);
-  }
+  },
+  
+  // Additional methods to replace electron.remote usage
+  getProcessVersions: () => ipcRenderer.invoke('get-process-versions'),
+  
+  // File system operations (extended)
+  readFileSync: (filePath) => ipcRenderer.invoke('read-file-sync', filePath),
+  writeFileSync: (filePath, content) => ipcRenderer.invoke('write-file-sync', filePath, content),
+  fileExists: (filePath) => ipcRenderer.invoke('file-exists', filePath),
+  readdirSync: (dirPath) => ipcRenderer.invoke('readdir-sync', dirPath),
+  
+  // OS information
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
+  getUsername: () => ipcRenderer.invoke('get-username'),
+  
+  // Screen information
+  getAllDisplays: () => ipcRenderer.invoke('get-all-displays'),
+  
+  // Window controls
+  isFullScreen: () => ipcRenderer.invoke('window-is-fullscreen'),
+  setFullScreen: (fullscreen) => ipcRenderer.invoke('window-set-fullscreen', fullscreen),
+  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+  isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+  maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
+  unmaximizeWindow: () => ipcRenderer.invoke('window-unmaximize'),
+  getWindowSize: () => ipcRenderer.invoke('window-get-size'),
+  setWindowSize: (width, height) => ipcRenderer.invoke('window-set-size', width, height),
+  toggleDevTools: () => ipcRenderer.invoke('toggle-dev-tools'),
+  
+  // Shell operations
+  shellOpenPath: (path) => ipcRenderer.invoke('shell-open-path', path),
+  
+  // App controls
+  appRelaunch: () => ipcRenderer.invoke('app-relaunch'),
+  appQuit: () => ipcRenderer.invoke('app-quit'),
+  
+  // Global shortcuts
+  globalShortcutRegister: (accelerator, callback) => ipcRenderer.invoke('global-shortcut-register', accelerator, callback),
+  globalShortcutUnregister: (accelerator) => ipcRenderer.invoke('global-shortcut-unregister', accelerator),
+  globalShortcutUnregisterAll: () => ipcRenderer.invoke('global-shortcut-unregister-all'),
+  
+  // Web frame operations
+  setVisualZoomLimits: (min, max) => ipcRenderer.invoke('set-visual-zoom-limits', min, max)
 });

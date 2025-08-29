@@ -31,6 +31,7 @@ signale.time("Startup");
 
 const electron = require("electron");
 const ipc = electron.ipcMain;
+const { ipcMain } = require("electron");
 const path = require("path");
 const url = require("url");
 const fs = require("fs");
@@ -475,6 +476,166 @@ app.on('ready', async () => {
     });
     ipc.on("setKbOverride", (e, arg) => {
         kbOverride = arg;
+    });
+
+    // Additional IPC handlers for renderer migration from remote module
+    
+    // App version and info
+    ipcMain.handle('get-app-version', () => {
+        return app.getVersion();
+    });
+
+    ipcMain.handle('get-process-versions', () => {
+        return process.versions;
+    });
+
+    // File system operations
+    ipcMain.handle('read-file-sync', (event, filePath) => {
+        try {
+            return fs.readFileSync(filePath, 'utf-8');
+        } catch (error) {
+            throw new Error(`Failed to read file ${filePath}: ${error.message}`);
+        }
+    });
+
+    ipcMain.handle('read-file', async (event, filePath) => {
+        try {
+            return await fs.promises.readFile(filePath, 'utf-8');
+        } catch (error) {
+            throw new Error(`Failed to read file ${filePath}: ${error.message}`);
+        }
+    });
+
+    ipcMain.handle('write-file', async (event, filePath, content) => {
+        try {
+            await fs.promises.writeFile(filePath, content, 'utf-8');
+            return { success: true };
+        } catch (error) {
+            throw new Error(`Failed to write file ${filePath}: ${error.message}`);
+        }
+    });
+
+    ipcMain.handle('write-file-sync', (event, filePath, content) => {
+        try {
+            fs.writeFileSync(filePath, content, 'utf-8');
+            return { success: true };
+        } catch (error) {
+            throw new Error(`Failed to write file ${filePath}: ${error.message}`);
+        }
+    });
+
+    ipcMain.handle('file-exists', (event, filePath) => {
+        return fs.existsSync(filePath);
+    });
+
+    ipcMain.handle('readdir-sync', (event, dirPath) => {
+        try {
+            return fs.readdirSync(dirPath);
+        } catch (error) {
+            throw new Error(`Failed to read directory ${dirPath}: ${error.message}`);
+        }
+    });
+
+    // OS information
+    ipcMain.handle('get-platform', () => {
+        return require('os').platform();
+    });
+
+    ipcMain.handle('get-username', async () => {
+        try {
+            const username = require('username');
+            return await username();
+        } catch (error) {
+            return null;
+        }
+    });
+
+    // Screen information
+    ipcMain.handle('get-all-displays', () => {
+        return electron.screen.getAllDisplays();
+    });
+
+    // Window controls via IPC
+    ipcMain.handle('window-is-fullscreen', () => {
+        return win.isFullScreen();
+    });
+
+    ipcMain.handle('window-set-fullscreen', (event, fullscreen) => {
+        win.setFullScreen(fullscreen);
+        return { success: true };
+    });
+
+    ipcMain.handle('window-minimize', () => {
+        win.minimize();
+        return { success: true };
+    });
+
+    ipcMain.handle('window-is-maximized', () => {
+        return win.isMaximized();
+    });
+
+    ipcMain.handle('window-maximize', () => {
+        win.maximize();
+        return { success: true };
+    });
+
+    ipcMain.handle('window-unmaximize', () => {
+        win.unmaximize();
+        return { success: true };
+    });
+
+    ipcMain.handle('window-get-size', () => {
+        return win.getSize();
+    });
+
+    ipcMain.handle('window-set-size', (event, width, height) => {
+        win.setSize(width, height);
+        return { success: true };
+    });
+
+    ipcMain.handle('toggle-dev-tools', () => {
+        win.webContents.toggleDevTools();
+        return { success: true };
+    });
+
+    // Shell operations
+    ipcMain.handle('shell-open-path', async (event, path) => {
+        return await shell.openPath(path);
+    });
+
+    // App restart and quit
+    ipcMain.handle('app-relaunch', () => {
+        app.relaunch();
+        app.quit();
+    });
+
+    ipcMain.handle('app-quit', () => {
+        app.quit();
+    });
+
+    // Global shortcuts management
+    ipcMain.handle('global-shortcut-register', (event, accelerator, callback) => {
+        const { globalShortcut } = electron;
+        return globalShortcut.register(accelerator, callback);
+    });
+
+    ipcMain.handle('global-shortcut-unregister', (event, accelerator) => {
+        const { globalShortcut } = electron;
+        globalShortcut.unregister(accelerator);
+        return { success: true };
+    });
+
+    ipcMain.handle('global-shortcut-unregister-all', () => {
+        const { globalShortcut } = electron;
+        globalShortcut.unregisterAll();
+        return { success: true };
+    });
+
+    // Web frame operations
+    ipcMain.handle('set-visual-zoom-limits', (event, min, max) => {
+        const { webFrame } = require('electron');
+        webFrame.setVisualZoomLevelLimits(min, max);
+        return { success: true };
     });
 });
 
